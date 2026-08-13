@@ -1,14 +1,19 @@
-mod api;
-mod cache;
-mod config;
-mod crypto;
-mod database;
-mod error;
-mod models;
-mod providers;
+pub mod adapters;
+pub mod cache;
+pub mod config;
+pub mod crypto;
+pub mod database;
+pub mod domain;
+pub mod error;
+pub mod ports;
+pub mod providers;
 
 use crate::{
-    api::AppState, cache::Cache, config::Config, crypto::TokenCipher, providers::Providers,
+    adapters::http::{AppState, router},
+    cache::Cache,
+    config::Config,
+    crypto::TokenCipher,
+    providers::Providers,
 };
 use std::time::Duration;
 use tower_http::{
@@ -31,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let db = database::connect_and_migrate(&config.database_url).await?;
     let cache = Cache::connect(&config.redis_url).await?;
     let providers = Providers::new(config.clone())?;
-    let app = api::router(AppState {
+    let app = router(AppState {
         db,
         cache,
         cipher: TokenCipher::new(config.encryption_key),

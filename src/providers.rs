@@ -1,7 +1,7 @@
 use crate::{
     config::Config,
     error::{ApiError, ApiResult},
-    models::{
+    domain::{
         HackClubIdentity, HackClubMePayload, HackatimeMePayload, HackatimeProjectsPayload,
         LapseTimelapsesResponse, LapseUser, LapseUserResponse, RegisterAttendanceRequest,
     },
