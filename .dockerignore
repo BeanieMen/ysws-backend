@@ -1,7 +1,6 @@
-/target
 **/node_modules
+**/target
 **/.next
-.env
+.git
 .vscode
-/uploads
 *.log

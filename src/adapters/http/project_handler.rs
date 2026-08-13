@@ -2,14 +2,14 @@ use crate::{
     adapters::http::{AppState, helpers::*},
     domain::{
         CreateProjectRequest, DashboardProject, DashboardProjectsResponse,
-        HackatimeProjectsPayload, Project, ProjectHackatimeResponse, ProjectLapsesResponse,
-        SetHackatimeProjectsRequest,
+        HackatimeProjectsPayload, Project, ProjectBannerResponse, ProjectHackatimeResponse,
+        ProjectLapsesResponse, SetHackatimeProjectsRequest, SubmitProjectResponse,
     },
     error::{ApiError, ApiResult},
 };
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
 };
 use std::{sync::Arc, time::Duration};
@@ -23,7 +23,7 @@ pub async fn create_project(
     let user_id = current_user(&state, &headers).await?;
     validate_len(&body.title, "title", 120)?;
     ensure_user(&state.db, user_id).await?;
-    let project = sqlx::query_as::<_, Project>("INSERT INTO projects (id, owner_id, title, description) VALUES ($1, $2, $3, $4) RETURNING id, owner_id, title, description, created_at, updated_at")
+    let project = sqlx::query_as::<_, Project>("INSERT INTO projects (id, owner_id, title, description) VALUES ($1, $2, $3, $4) RETURNING id, owner_id, title, description, banner_url, submission_status, submitted_at, created_at, updated_at")
         .bind(Uuid::new_v4()).bind(user_id).bind(body.title.trim()).bind(body.description.map(|d| d.trim().to_owned()).filter(|d| !d.is_empty()))
         .fetch_one(&state.db).await?;
     Ok((StatusCode::CREATED, Json(project)))
@@ -34,7 +34,7 @@ pub async fn list_projects(
     headers: HeaderMap,
 ) -> ApiResult<Json<DashboardProjectsResponse>> {
     let user_id = current_user(&state, &headers).await?;
-    let projects = sqlx::query_as::<_, Project>("SELECT id, owner_id, title, description, created_at, updated_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC")
+    let projects = sqlx::query_as::<_, Project>("SELECT id, owner_id, title, description, banner_url, submission_status, submitted_at, created_at, updated_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC")
         .bind(user_id).fetch_all(&state.db).await?;
     let available = user_hackatime_projects(&state, user_id)
         .await
@@ -59,6 +59,9 @@ pub async fn list_projects(
             id: project.id,
             title: project.title,
             description: project.description,
+            banner_url: project.banner_url,
+            submission_status: project.submission_status,
+            submitted_at: project.submitted_at,
             linked_project_names,
             total_seconds: project_seconds,
         });
@@ -192,4 +195,107 @@ pub async fn get_project_lapses(
         .set_json(&cache_key, &result, Duration::from_secs(300))
         .await;
     Ok(Json(result))
+}
+
+pub async fn upload_project_banner(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<Uuid>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> ApiResult<Json<ProjectBannerResponse>> {
+    let session_user = current_session_user(&state, &headers).await?;
+    own_project_or_admin(&state.db, project_id, &session_user).await?;
+
+    let mut file_data = Vec::new();
+    let mut file_ext = "png".to_string();
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::BadRequest(format!("invalid multipart data: {e}")))?
+    {
+        let name = field.name().unwrap_or("");
+        if name == "banner" || name == "file" || name == "image" || name == "upload" {
+            if let Some(content_type) = field.content_type() {
+                file_ext = match content_type {
+                    "image/jpeg" | "image/jpg" => "jpg".into(),
+                    "image/png" => "png".into(),
+                    "image/webp" => "webp".into(),
+                    "image/gif" => "gif".into(),
+                    _ => {
+                        return Err(ApiError::BadRequest(
+                            "only JPEG, PNG, WebP, and GIF images are allowed".into(),
+                        ));
+                    }
+                };
+            }
+            file_data = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::BadRequest(format!("failed to read image file: {e}")))?
+                .to_vec();
+            break;
+        }
+    }
+
+    if file_data.is_empty() {
+        return Err(ApiError::BadRequest("no banner image file provided".into()));
+    }
+
+    if file_data.len() > 10 * 1024 * 1024 {
+        return Err(ApiError::BadRequest("banner image exceeds maximum limit of 10MB".into()));
+    }
+
+    let upload_dir = std::path::Path::new("uploads/banners");
+    tokio::fs::create_dir_all(upload_dir)
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+
+    let filename = format!("{project_id}_{}.{file_ext}", Uuid::new_v4());
+    let filepath = upload_dir.join(&filename);
+    tokio::fs::write(&filepath, file_data)
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+
+    let banner_url = format!("/uploads/banners/{filename}");
+
+    sqlx::query("UPDATE projects SET banner_url = $1, updated_at = now() WHERE id = $2")
+        .bind(&banner_url)
+        .bind(project_id)
+        .execute(&state.db)
+        .await?;
+
+    state
+        .cache
+        .delete(&format!("project:{project_id}:hackatime"))
+        .await;
+
+    Ok(Json(ProjectBannerResponse {
+        project_id,
+        banner_url,
+    }))
+}
+
+pub async fn submit_project(
+    State(state): State<Arc<AppState>>,
+    Path(project_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> ApiResult<Json<SubmitProjectResponse>> {
+    let session_user = current_session_user(&state, &headers).await?;
+    own_project_or_admin(&state.db, project_id, &session_user).await?;
+
+    let row = sqlx::query_as::<_, Project>(
+        "UPDATE projects SET submission_status = 'submitted', submitted_at = now(), updated_at = now() WHERE id = $1 RETURNING id, owner_id, title, description, banner_url, submission_status, submitted_at, created_at, updated_at",
+    )
+    .bind(project_id)
+    .fetch_one(&state.db)
+    .await?;
+
+    let submitted_at = row.submitted_at.unwrap_or_else(chrono::Utc::now);
+
+    Ok(Json(SubmitProjectResponse {
+        project_id,
+        submission_status: row.submission_status,
+        submitted_at,
+    }))
 }

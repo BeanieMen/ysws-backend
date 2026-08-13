@@ -1,4 +1,37 @@
 services:
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - uploads_data:/uploads:ro
+    depends_on:
+      - backend
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/test-instance
+      REDIS_URL: redis://redis:6379
+      PORT: 8000
+      APP_ENCRYPTION_KEY: 4c18608f89ec1451f73134f9ebfaf02cd7a5c9a179d38c38fd591e1f3448553d
+      HACKCLUB_CLIENT_ID: 827ea4f6b3458cc6bfc2c3083c2bf9c1
+      HACKCLUB_CLIENT_SECRET: 37d3c7c25815d1f1fbd357dae7d3d937a94cb0356d87ae07e99a1c65c3906b3d
+      HACKCLUB_REDIRECT_URI: http://localhost:3000/auth/hackclub/callback
+      HACKATIME_CLIENT_ID: FPkFcLpyAYbz4dDjwnbjFtEtJowxzpej69XI1auOtV4
+      HACKATIME_CLIENT_SECRET: h5uLjyz4ZXf0D-syZwW6XHs8Ij2NZnhEZGfT7C9pC60
+      HACKATIME_REDIRECT_URI: http://localhost:3000/auth/hackatime/callback
+    volumes:
+      - uploads_data:/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -31,3 +64,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  uploads_data:

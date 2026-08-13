@@ -1,49 +1,96 @@
-# test-instance API (Rust)
+# test-instance (Rust Backend & Web App)
 
-Rust backend and small web app for projects, Hackatime, Lapse, and Hack Club Attend. PostgreSQL is the source of truth; Redis is deliberately used for short-lived cache entries, OAuth state, rate limits, idempotency responses, and distributed write locks so provider calls and repeat reads do not overload the database.
+A high-performance Rust backend and Next.js web application built with **Hexagonal Architecture (Ports & Adapters)**, **NGINX Gateway Load Balancing**, **PostgreSQL**, **Redis**, and **Role-Based Access Control (RBAC)**.
 
-## Run locally
+---
+
+## 🚀 How to Run the Whole Project
+
+### Option 1: Run Full Stack with Docker Compose (Recommended)
 
 ```bash
+# 1. Copy environment variables
 cp .env.example .env
-# Set APP_ENCRYPTION_KEY to a real 32-byte hex key.
+
+# 2. Start NGINX Gateway (Port 8000), PostgreSQL, Redis, and Backend
 docker compose up -d
+
+# 3. Start Frontend Web App (Port 3000)
+cd frontend
+npm install
+npm run dev
+```
+
+- **Frontend App**: `http://localhost:3000`
+- **Backend API Gateway (NGINX Load Balancer)**: `http://localhost:8000`
+
+To scale backend worker instances dynamically behind the gateway:
+```bash
+docker compose up --scale backend=3 -d
+```
+
+---
+
+### Option 2: Local Backend Development (Cargo)
+
+```bash
+# 1. Copy environment configuration
+cp .env.example .env
+
+# 2. Start PostgreSQL and Redis infrastructure
+docker compose up postgres redis -d
+
+# 3. Build & run Rust backend (Auto-applies migrations)
 cargo run
 ```
 
-The server runs migrations from `database/migrations/` at startup and exposes `GET /healthz`. The migration ledger lives in PostgreSQL (`_sqlx_migrations`), so migrations are applied exactly once. PostgREST, if you add it, should point at this same migrated PostgreSQL database; it does not execute migration files itself.
+---
 
-## Current API
+## 🔐 User Roles (RBAC)
 
-The web app is served by the Rust process. Its flow is intentionally small:
+| Role | Description |
+| --- | --- |
+| `user` | Default role. Create projects, link Hackatime, upload banners, submit for review. |
+| `reviewer` | All `user` rights + review submitted projects (`GET /api/v1/reviews/projects`). |
+| `admin` | Full control. Edit/delete any user or project, update roles (`PUT /api/v1/admin/users/:id/role`). |
 
-1. `/` asks only for an email address.
-2. `/sign-in` offers only **Sign in with Hack Club**.
-3. Hack Club OAuth redirects to `/dashboard`, where users can create projects, connect Hackatime, choose linked Hackatime projects, and see per-project plus total tracked time.
+---
 
-The API uses the `session` HttpOnly cookie issued after Hack Club OAuth. It does not accept browser-supplied user IDs or provider tokens.
+## 📡 API Reference
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/auth/hackclub/login?email=…` | Starts Hack Club OAuth |
-| `GET` | `/auth/hackatime/login` | Starts Hackatime OAuth for the signed-in user |
-| `GET` | `/api/v1/me` | Returns the session user |
-| `GET` / `POST` | `/api/v1/projects` | Lists project time / creates a project |
-| `GET` | `/api/v1/hackatime/projects` | Lists available Hackatime projects |
-| `PUT` | `/api/v1/projects/:project_id/hackatime-projects` | Links Hackatime project names (owner only) |
-| `GET` | `/api/v1/projects/:project_id/hackatime` | Fetches linked Hackatime project summaries |
-| `GET` | `/api/v1/projects/:project_id/lapses` | Fetches Lapse timelapses matching linked names |
-| `POST` | `/api/v1/attendance/events/:event_id/register` | Registers current user with Attend |
+### Authentication & Users
+| Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/auth/hackclub/login?email=…` | Starts Hack Club OAuth | Public |
+| `GET` | `/auth/hackatime/login` | Starts Hackatime OAuth | Authenticated |
+| `POST` | `/auth/logout` | Clears session cookie | Authenticated |
+| `GET` | `/api/v1/me` | Returns current user profile & role | Authenticated |
 
-`POST /attendance` accepts an optional `Idempotency-Key` header. Its registration row has a database uniqueness constraint as the final duplicate-prevention layer; Redis makes repeated requests cheap and provider calls serialized.
+### Projects & Banner Uploads
+| Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` / `POST` | `/api/v1/projects` | List user projects / Create a project | Owner / Admin |
+| `POST` | `/api/v1/projects/:id/banner` | Upload banner image (JPEG, PNG, WebP) | Owner / Admin |
+| `POST` | `/api/v1/projects/:id/submit` | Submit project for review | Owner / Admin |
+| `PUT` | `/api/v1/projects/:id/hackatime-projects` | Link Hackatime projects | Owner / Admin |
+| `GET` | `/api/v1/projects/:id/hackatime` | Fetch linked Hackatime time | Owner / Admin |
+| `GET` | `/api/v1/projects/:id/lapses` | Fetch linked Lapse timelapses | Owner / Admin |
 
-## OAuth setup
+### Reviews & Admin
+| Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/reviews/projects` | List projects available for review | Reviewer / Admin |
+| `POST` | `/api/v1/projects/:id/reviews` | Submit project review | Reviewer / Admin |
+| `GET` | `/api/v1/admin/users` | List all system users | Admin Only |
+| `PUT` | `/api/v1/admin/users/:id/role` | Change user role (`user`, `reviewer`, `admin`) | Admin Only |
+| `DELETE` | `/api/v1/admin/users/:id` | Delete user account | Admin Only |
+| `DELETE` | `/api/v1/admin/projects/:id` | Delete project | Admin Only |
 
-Create one Hack Club Auth app and one Hackatime OAuth app. Register these local callback URLs exactly (or their HTTPS production equivalents):
+---
 
-```text
-http://localhost:3000/auth/hackclub/callback
-http://localhost:3000/auth/hackatime/callback
+## 🧪 Testing
+
+```bash
+# Run unit tests
+cargo test
 ```
-
-Copy the client IDs, secrets, and callback URLs into `.env`. Set `COOKIE_SECURE=true` when deploying on HTTPS.

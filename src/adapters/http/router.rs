@@ -10,6 +10,7 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use std::sync::Arc;
+use tower_http::services::ServeDir;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,6 +23,7 @@ pub struct AppState {
 
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .nest_service("/uploads", ServeDir::new("uploads"))
         .route("/healthz", get(health_handler::health))
         .route("/auth/hackclub/login", get(auth_handler::hackclub_login))
         .route(
@@ -38,6 +40,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/projects",
             get(project_handler::list_projects).post(project_handler::create_project),
+        )
+        .route(
+            "/api/v1/projects/{project_id}/banner",
+            post(project_handler::upload_project_banner),
+        )
+        .route(
+            "/api/v1/projects/{project_id}/submit",
+            post(project_handler::submit_project),
         )
         .route(
             "/api/v1/hackatime/projects",

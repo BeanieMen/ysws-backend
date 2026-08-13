@@ -15,6 +15,7 @@ use crate::{
     crypto::TokenCipher,
     providers::Providers,
 };
+use axum::extract::DefaultBodyLimit;
 use std::time::Duration;
 use tower_http::{
     cors::CorsLayer,
@@ -36,6 +37,9 @@ async fn main() -> anyhow::Result<()> {
     let db = database::connect_and_migrate(&config.database_url).await?;
     let cache = Cache::connect(&config.redis_url).await?;
     let providers = Providers::new(config.clone())?;
+
+    tokio::fs::create_dir_all("uploads/banners").await.ok();
+
     let app = router(AppState {
         db,
         cache,
@@ -43,9 +47,10 @@ async fn main() -> anyhow::Result<()> {
         providers,
         cookie_secure: config.cookie_secure,
     })
+    .layer(DefaultBodyLimit::max(15 * 1024 * 1024))
     .layer(TimeoutLayer::with_status_code(
         axum::http::StatusCode::REQUEST_TIMEOUT,
-        Duration::from_secs(15),
+        Duration::from_secs(30),
     ))
     .layer(PropagateRequestIdLayer::new(
         axum::http::HeaderName::from_static("x-request-id"),
