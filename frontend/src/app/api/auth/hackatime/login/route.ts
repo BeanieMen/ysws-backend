@@ -1,0 +1,7 @@
+import { NextRequest } from "next/server";
+import { backendFetch, proxyResponse } from "@/lib/backend";
+
+export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  return proxyResponse(await backendFetch(request, `/auth/hackatime/login${url.search}`));
+}

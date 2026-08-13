@@ -1,0 +1,17 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = (await cookies()).get("session")?.value;
+  if (!session) redirect("/");
+
+  const response = await fetch(`${backendUrl}/api/v1/me`, {
+    headers: { cookie: `session=${session}` },
+    cache: "no-store",
+  });
+  if (!response.ok) redirect("/");
+
+  return children;
+}
