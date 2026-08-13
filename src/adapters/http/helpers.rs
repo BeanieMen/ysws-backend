@@ -1,6 +1,6 @@
 use crate::{
     adapters::http::AppState,
-    domain::{HackClubIdentity, HackatimeProjectsPayload},
+    domain::{HackClubIdentity, HackatimeProjectsPayload, SessionUser, UserRole},
     error::{ApiError, ApiResult},
     ports::CryptoPort,
 };
@@ -10,16 +10,21 @@ use sqlx::{PgPool, Row};
 use std::time::Duration;
 use uuid::Uuid;
 
-pub async fn current_user(state: &AppState, headers: &HeaderMap) -> ApiResult<Uuid> {
+pub async fn current_session_user(state: &AppState, headers: &HeaderMap) -> ApiResult<SessionUser> {
     let token = session_token(headers)
         .ok_or_else(|| ApiError::Unauthorized("sign in with Hack Club first".into()))?;
-    let user_id: Option<Uuid> = sqlx::query_scalar(
-        "SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at > now()",
+    let user = sqlx::query_as::<_, SessionUser>(
+        "SELECT u.id, u.email, u.first_name, u.last_name, u.role FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token_hash = $1 AND s.expires_at > now()",
     )
     .bind(token_hash(token))
     .fetch_optional(&state.db)
     .await?;
-    user_id.ok_or_else(|| ApiError::Unauthorized("your session has expired; sign in again".into()))
+    user.ok_or_else(|| ApiError::Unauthorized("your session has expired; sign in again".into()))
+}
+
+pub async fn current_user(state: &AppState, headers: &HeaderMap) -> ApiResult<Uuid> {
+    let user = current_session_user(state, headers).await?;
+    Ok(user.id)
 }
 
 pub async fn own_project(db: &PgPool, project_id: Uuid, user_id: Uuid) -> ApiResult<()> {
@@ -31,6 +36,36 @@ pub async fn own_project(db: &PgPool, project_id: Uuid, user_id: Uuid) -> ApiRes
         Some(id) if id == user_id => Ok(()),
         Some(_) => Err(ApiError::Forbidden("you do not own this project".into())),
         None => Err(ApiError::NotFound("project not found".into())),
+    }
+}
+
+pub async fn own_project_or_admin(db: &PgPool, project_id: Uuid, session_user: &SessionUser) -> ApiResult<()> {
+    if session_user.role == UserRole::Admin {
+        let exists: Option<Uuid> = sqlx::query_scalar("SELECT id FROM projects WHERE id = $1")
+            .bind(project_id)
+            .fetch_optional(db)
+            .await?;
+        return match exists {
+            Some(_) => Ok(()),
+            None => Err(ApiError::NotFound("project not found".into())),
+        };
+    }
+    own_project(db, project_id, session_user.id).await
+}
+
+pub fn require_admin(user: &SessionUser) -> ApiResult<()> {
+    if user.role == UserRole::Admin {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden("admin privileges required".into()))
+    }
+}
+
+pub fn require_reviewer_or_admin(user: &SessionUser) -> ApiResult<()> {
+    if user.role == UserRole::Reviewer || user.role == UserRole::Admin {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden("reviewer or admin privileges required".into()))
     }
 }
 
@@ -116,7 +151,7 @@ pub async fn upsert_hackclub_user(db: &PgPool, identity: HackClubIdentity) -> Ap
     }
     let id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO users (id, hca_id, email, first_name, last_name) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO users (id, hca_id, email, first_name, last_name, role) VALUES ($1, $2, $3, $4, $5, 'user')",
     )
     .bind(id)
     .bind(identity.id)

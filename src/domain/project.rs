@@ -37,3 +37,20 @@ pub struct DashboardProjectsResponse {
     pub projects: Vec<DashboardProject>,
     pub total_seconds: f64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct ProjectReview {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub reviewer_id: Uuid,
+    pub status: String,
+    pub comment: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateProjectReviewRequest {
+    pub status: String,
+    pub comment: Option<String>,
+}

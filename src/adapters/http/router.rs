@@ -1,12 +1,13 @@
 use crate::{
     adapters::http::{
-        attendance_handler, auth_handler, health_handler, project_handler, user_handler,
+        admin_handler, attendance_handler, auth_handler, health_handler, project_handler,
+        review_handler, user_handler,
     },
     ports::{CachePort, CryptoPort, DbPort, ProvidersPort},
 };
 use axum::{
     Router,
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use std::sync::Arc;
 
@@ -57,6 +58,29 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/attendance/events/{event_id}/register",
             post(attendance_handler::register_attendance),
+        )
+        // Reviewer & Admin endpoints
+        .route(
+            "/api/v1/reviews/projects",
+            get(review_handler::list_projects_for_review),
+        )
+        .route(
+            "/api/v1/projects/{project_id}/reviews",
+            get(review_handler::get_project_reviews).post(review_handler::create_project_review),
+        )
+        // Admin-only endpoints
+        .route("/api/v1/admin/users", get(admin_handler::list_users))
+        .route(
+            "/api/v1/admin/users/{user_id}/role",
+            put(admin_handler::update_user_role),
+        )
+        .route(
+            "/api/v1/admin/users/{user_id}",
+            put(admin_handler::admin_update_user).delete(admin_handler::admin_delete_user),
+        )
+        .route(
+            "/api/v1/admin/projects/{project_id}",
+            delete(admin_handler::admin_delete_project),
         )
         .with_state(Arc::new(state))
 }

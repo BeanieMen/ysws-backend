@@ -75,9 +75,9 @@ pub async fn set_hackatime_projects(
     headers: HeaderMap,
     Json(body): Json<SetHackatimeProjectsRequest>,
 ) -> ApiResult<StatusCode> {
-    let user_id = current_user(&state, &headers).await?;
+    let session_user = current_session_user(&state, &headers).await?;
     let names = normalized_names(body.names)?;
-    own_project(&state.db, project_id, user_id).await?;
+    own_project_or_admin(&state.db, project_id, &session_user).await?;
     let lock_key = format!("lock:project:{project_id}:hackatime-projects");
     let lock_token = Uuid::new_v4().to_string();
     if !state
@@ -117,14 +117,14 @@ pub async fn get_project_hackatime(
     Path(project_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> ApiResult<Json<ProjectHackatimeResponse>> {
-    let owner_id = current_user(&state, &headers).await?;
-    own_project(&state.db, project_id, owner_id).await?;
+    let session_user = current_session_user(&state, &headers).await?;
+    own_project_or_admin(&state.db, project_id, &session_user).await?;
     let cache_key = format!("project:{project_id}:hackatime");
     if let Some(cached) = state.cache.get_json(&cache_key).await {
         return Ok(Json(cached));
     }
     let (names, token, _) =
-        linked_connection(&state.db, &state.cipher, project_id, owner_id).await?;
+        linked_connection(&state.db, &state.cipher, project_id, session_user.id).await?;
     let summary = state.providers.hackatime_projects(&token).await?;
     let linked: std::collections::HashSet<_> = names.iter().collect();
     let projects = summary
@@ -149,14 +149,14 @@ pub async fn get_project_lapses(
     Path(project_id): Path<Uuid>,
     headers: HeaderMap,
 ) -> ApiResult<Json<ProjectLapsesResponse>> {
-    let owner_id = current_user(&state, &headers).await?;
-    own_project(&state.db, project_id, owner_id).await?;
+    let session_user = current_session_user(&state, &headers).await?;
+    own_project_or_admin(&state.db, project_id, &session_user).await?;
     let cache_key = format!("project:{project_id}:lapses");
     if let Some(cached) = state.cache.get_json(&cache_key).await {
         return Ok(Json(cached));
     }
     let (names, _, account_id) =
-        linked_connection(&state.db, &state.cipher, project_id, owner_id).await?;
+        linked_connection(&state.db, &state.cipher, project_id, session_user.id).await?;
     let Some(lapse_user) = state.providers.lapse_user(&account_id).await? else {
         return Ok(Json(ProjectLapsesResponse {
             lapse_user: None,
