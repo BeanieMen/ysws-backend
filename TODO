@@ -1,20 +1,20 @@
-1. Next.js Frontend UI Polish — Implement a modern design system with Tailwind CSS v4, dark mode aesthetics, glassmorphism, smooth micro-animations, and responsive layouts.
-
-2. PostHog Connection — Initialize posthog-js SDK in Next.js to track user logins, project creation, and Hackatime linking events.
-
-3. Lapse Reviewing Connection — Integrate Lapse API (api.lapse.hackclub.com) to stream timelapse video recordings for submission reviews.
-
-4. Reviewer Database & PII Scoping — Set up reviewer database tables (ReviewerNote, ReviewerChecklist) and enforce strict PII redaction (scopeUserData()).
-
-5. Fraud Review Connection — Connect Joe Fraud Review API (joe.fraud.hackclub.com) for fraud flagging, match highlighting, and review verdicts.
-
-6. Pentesting & Security Hardening — Audit OAuth state/redirect parameter safety, enforce cookie flags (HttpOnly/SameSite), 
-rate limit endpoints, and verify role RBAC guards.
-
-7. OpenAPI Client Generation — Auto-generate typed OpenAPI fetch clients (generate:api) for Next.js endpoints to maintain strict backend-frontend contract safety.
-
-8. Slack DM & Event Notifications — Connect internal Slack service to trigger automated DM notifications on project approval, rejection, and fraud flags.
-
-9. Airtable Sync Pipeline — Set up background Airtable sync routines for participant records, project metrics, and shop purchases.
-
-10. Production Deployment & Monitoring — Configure Docker container builds, health check monitoring (/health), and environment variable configs for live deployment.
+airtable — sync pipeline for participant/project records
+announcements
+balance
+community-events
+events
+fraud-review — fraud flagging/verdicts
+gift-codes
+github
+huddles
+integrations
+loops (email/marketing)
+manifest
+metrics
+posthog — analytics tracking
+shop
+slack
+slack-channels
+streaks
+submission-approval
+ticket-qualify-email
