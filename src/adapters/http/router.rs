@@ -1,6 +1,6 @@
 use crate::{
     adapters::http::{
-        admin_handler, attendance_handler, auth_handler, health_handler, project_handler,
+        admin_handler, airtable_handler, attendance_handler, auth_handler, health_handler, project_handler,
         review_handler, user_handler,
     },
     ports::{CachePort, CryptoPort, DbPort, ProvidersPort},
@@ -46,8 +46,13 @@ pub fn router(state: AppState) -> Router {
             post(project_handler::upload_project_banner),
         )
         .route(
+            "/api/v1/projects/{project_id}/ship",
+            post(project_handler::ship_project),
+        )
+        // Kept for clients using the original name; shipping is the canonical action.
+        .route(
             "/api/v1/projects/{project_id}/submit",
-            post(project_handler::submit_project),
+            post(project_handler::ship_project),
         )
         .route(
             "/api/v1/hackatime/projects",
@@ -80,6 +85,7 @@ pub fn router(state: AppState) -> Router {
         )
         // Admin-only endpoints
         .route("/api/v1/admin/users", get(admin_handler::list_users))
+        .route("/api/v1/admin/airtable/sync", post(airtable_handler::sync_airtable))
         .route(
             "/api/v1/admin/users/{user_id}/role",
             put(admin_handler::update_user_role),

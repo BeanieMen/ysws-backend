@@ -51,8 +51,8 @@ cargo run
 | Role | Description |
 | --- | --- |
 | `user` | Default role. Create projects, link Hackatime, upload banners, submit for review. |
-| `reviewer` | All `user` rights + review submitted projects (`GET /api/v1/reviews/projects`). |
-| `admin` | Full control. Edit/delete any user or project, update roles (`PUT /api/v1/admin/users/:id/role`). |
+| `reviewer` | All `user` rights + review shipped projects from `/dashboard`. |
+| `admin` | Full control, including unshipped-project visibility and reviews, from `/admin`. |
 
 ---
 
@@ -71,7 +71,7 @@ cargo run
 | --- | --- | --- | --- |
 | `GET` / `POST` | `/api/v1/projects` | List user projects / Create a project | Owner / Admin |
 | `POST` | `/api/v1/projects/:id/banner` | Upload banner image (JPEG, PNG, WebP) | Owner / Admin |
-| `POST` | `/api/v1/projects/:id/submit` | Submit project for review | Owner / Admin |
+| `POST` | `/api/v1/projects/:id/ship` | Ship a project for reviewer visibility | Owner |
 | `PUT` | `/api/v1/projects/:id/hackatime-projects` | Link Hackatime projects | Owner / Admin |
 | `GET` | `/api/v1/projects/:id/hackatime` | Fetch linked Hackatime time | Owner / Admin |
 | `GET` | `/api/v1/projects/:id/lapses` | Fetch linked Lapse timelapses | Owner / Admin |
@@ -79,7 +79,7 @@ cargo run
 ### Reviews & Admin
 | Method | Endpoint | Description | Access |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/reviews/projects` | List projects available for review | Reviewer / Admin |
+| `GET` | `/api/v1/reviews/projects` | List shipped projects for reviewers; all projects for admins | Reviewer / Admin |
 | `POST` | `/api/v1/projects/:id/reviews` | Submit project review | Reviewer / Admin |
 | `GET` | `/api/v1/admin/users` | List all system users | Admin Only |
 | `PUT` | `/api/v1/admin/users/:id/role` | Change user role (`user`, `reviewer`, `admin`) | Admin Only |

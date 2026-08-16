@@ -20,6 +20,14 @@ pub struct Config {
     pub cookie_secure: bool,
     pub lapse_api_base_url: String,
     pub lapse_api_token: Option<String>,
+    pub airtable_api_key: Option<String>,
+    pub airtable_base_id: Option<String>,
+    pub airtable_participants_table: String,
+    pub airtable_projects_table: String,
+    pub airtable_participant_id_field: String,
+    pub airtable_project_id_field: String,
+    pub airtable_fraud_approval_field: String,
+    pub airtable_sync_interval: Duration,
     pub provider_timeout: Duration,
 }
 
@@ -65,6 +73,20 @@ impl Config {
                 .is_ok_and(|value| value == "true" || value == "1"),
             lapse_api_base_url: env_or("LAPSE_API_BASE_URL", "https://api.lapse.hackclub.com"),
             lapse_api_token: env::var("LAPSE_API_TOKEN").ok().filter(|s| !s.is_empty()),
+            airtable_api_key: optional("AIRTABLE_API_KEY"),
+            airtable_base_id: optional("AIRTABLE_BASE_ID"),
+            airtable_participants_table: env_or("AIRTABLE_PARTICIPANTS_TABLE", "Participants"),
+            airtable_projects_table: env_or("AIRTABLE_PROJECTS_TABLE", "Projects"),
+            airtable_participant_id_field: env_or("AIRTABLE_PARTICIPANT_ID_FIELD", "Participant ID"),
+            airtable_project_id_field: env_or("AIRTABLE_PROJECT_ID_FIELD", "Project ID"),
+            airtable_fraud_approval_field: env_or("AIRTABLE_FRAUD_APPROVAL_FIELD", "Fraud Approval"),
+            airtable_sync_interval: Duration::from_secs(
+                env::var("AIRTABLE_SYNC_INTERVAL_SECONDS")
+                    .ok()
+                    .and_then(|value| value.parse().ok())
+                    .filter(|seconds: &u64| *seconds > 0)
+                    .unwrap_or(300),
+            ),
             provider_timeout: Duration::from_secs(10),
         })
     }
@@ -79,4 +101,8 @@ fn env_or(name: &str, default: &str) -> String {
         .unwrap_or_else(|_| default.into())
         .trim_end_matches('/')
         .into()
+}
+
+fn optional(name: &str) -> Option<String> {
+    env::var(name).ok().map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
 }

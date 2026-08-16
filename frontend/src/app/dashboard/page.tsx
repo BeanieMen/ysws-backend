@@ -10,6 +10,10 @@ interface Project {
   description?: string;
   linked_project_names: string[];
   total_seconds: number;
+  submission_status: string;
+  shipped_at?: string | null;
+  project_approval_status: string;
+  fraud_approval_status: string;
 }
 
 interface DashboardData {
@@ -22,8 +26,16 @@ interface HackatimeProject {
   total_duration?: number;
 }
 
+interface ReviewProject {
+  id: string;
+  title: string;
+  description?: string | null;
+  shipped_at?: string | null;
+}
+
 interface CurrentUser {
   first_name: string;
+  role: "user" | "reviewer" | "admin";
   hackatime_connected: boolean;
 }
 
@@ -31,9 +43,58 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Request failed";
 }
 
+function ShipStatusBadge({ shippedAt }: { shippedAt: string | null }) {
+  if (shippedAt) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+        Shipped
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+      Not shipped
+    </span>
+  );
+}
+
+function ApprovalStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; color: string; dot: string }> = {
+    approved: { label: "Approved", color: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
+    rejected: { label: "Rejected", color: "text-red-700 bg-red-50 border-red-200", dot: "bg-red-500" },
+    changes_requested: { label: "Changes requested", color: "text-orange-700 bg-orange-50 border-orange-200", dot: "bg-orange-400" },
+    pending: { label: "Pending review", color: "text-slate-600 bg-slate-50 border-slate-200", dot: "bg-slate-400" },
+  };
+  const s = map[status] ?? map["pending"];
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold border rounded-full px-2.5 py-0.5 ${s.color}`}>
+      <span className={`w-1.5 h-1.5 rounded-full inline-block ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+}
+
+function FraudStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; color: string; dot: string }> = {
+    approved: { label: "Fraud: Clear", color: "text-emerald-700 bg-emerald-50 border-emerald-200", dot: "bg-emerald-500" },
+    rejected: { label: "Fraud: Flagged", color: "text-red-700 bg-red-50 border-red-200", dot: "bg-red-500" },
+    pending: { label: "Fraud: Under review", color: "text-slate-600 bg-slate-50 border-slate-200", dot: "bg-slate-400" },
+  };
+  const s = map[status] ?? map["pending"];
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-bold border rounded-full px-2.5 py-0.5 ${s.color}`}>
+      <span className={`w-1.5 h-1.5 rounded-full inline-block ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
+  const [role, setRole] = useState<CurrentUser["role"]>("user");
   const [hackatimeConnected, setHackatimeConnected] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardData>({ projects: [], total_seconds: 0 });
   const [availableProjects, setAvailableProjects] = useState<HackatimeProject[]>([]);
@@ -48,6 +109,12 @@ export default function Dashboard() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedNames, setSelectedNames] = useState<string[]>([]);
   const [linkError, setLinkError] = useState("");
+  const [shippingProjectId, setShippingProjectId] = useState<string | null>(null);
+  const [reviewProjects, setReviewProjects] = useState<ReviewProject[]>([]);
+  const [reviewStatus, setReviewStatus] = useState<Record<string, string>>({});
+  const [reviewComment, setReviewComment] = useState<Record<string, string>>({});
+  const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
+  const [reviewMessage, setReviewMessage] = useState("");
 
   const fetchApi = useCallback(async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
     const res = await fetch(path, {
@@ -88,17 +155,28 @@ export default function Dashboard() {
     }
   }, [fetchApi]);
 
+  const loadReviewProjects = useCallback(async () => {
+    const projects = await fetchApi<ReviewProject[]>("/api/v1/reviews/projects");
+    setReviewProjects(projects);
+  }, [fetchApi]);
+
   useEffect(() => {
     fetchApi<CurrentUser>("/api/v1/me")
       .then((user) => {
+        if (user.role === "admin") {
+          router.replace("/admin");
+          return;
+        }
         setUserName(user.first_name);
+        setRole(user.role);
         setHackatimeConnected(user.hackatime_connected);
-        loadData();
+        void loadData();
+        if (user.role === "reviewer") void loadReviewProjects().catch((error) => setReviewMessage(errorMessage(error)));
       })
       .catch(() => {
         router.replace("/");
       });
-  }, [fetchApi, loadData, router]);
+  }, [fetchApi, loadData, loadReviewProjects, router]);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +199,37 @@ export default function Dashboard() {
       await fetchApi("/auth/logout", { method: "POST" });
     } finally {
       router.replace("/");
+    }
+  };
+
+  const handleShipProject = async (projectId: string) => {
+    setShippingProjectId(projectId);
+    try {
+      await fetchApi(`/api/v1/projects/${projectId}/ship`, { method: "POST" });
+      await loadData();
+    } catch (error) {
+      window.alert(errorMessage(error));
+    } finally {
+      setShippingProjectId(null);
+    }
+  };
+
+  const handleReview = async (projectId: string) => {
+    setReviewingProjectId(projectId);
+    setReviewMessage("");
+    try {
+      await fetchApi(`/api/v1/projects/${projectId}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({
+          status: reviewStatus[projectId] || "approved",
+          comment: reviewComment[projectId] || null,
+        }),
+      });
+      setReviewMessage("Review saved.");
+    } catch (error) {
+      setReviewMessage(errorMessage(error));
+    } finally {
+      setReviewingProjectId(null);
     }
   };
 
@@ -159,6 +268,7 @@ export default function Dashboard() {
           test-instance<span className="text-[#ec3750]">_</span>
         </Link>
         <div className="flex items-center gap-4 text-sm font-semibold">
+          {role === "reviewer" && <span className="text-[#ec3750]">Reviewer</span>}
           <span>{userName}</span>
           <button
             onClick={handleLogout}
@@ -292,13 +402,29 @@ export default function Dashboard() {
                           {formatTime(proj.total_seconds)}
                         </strong>
                         <span className="text-xs text-slate-400">tracked time</span>
+                        <div className="flex flex-col items-start md:items-end gap-1 mt-2">
+                          <ShipStatusBadge shippedAt={proj.shipped_at ?? null} />
+                          <FraudStatusBadge status={proj.fraud_approval_status} />
+                          <ApprovalStatusBadge status={proj.project_approval_status} />
+                        </div>
                       </div>
-                      <button
-                        onClick={() => openModal(proj)}
-                        className="mt-3 px-3 py-1.5 bg-[#ec3750]/10 hover:bg-[#ec3750]/20 text-[#d62740] font-bold text-xs rounded-lg transition"
-                      >
-                        Link Hackatime
-                      </button>
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          onClick={() => openModal(proj)}
+                          className="px-3 py-1.5 bg-[#ec3750]/10 hover:bg-[#ec3750]/20 text-[#d62740] font-bold text-xs rounded-lg transition"
+                        >
+                          Link Hackatime
+                        </button>
+                        {!proj.shipped_at && (
+                          <button
+                            onClick={() => handleShipProject(proj.id)}
+                            disabled={shippingProjectId === proj.id}
+                            className="px-3 py-1.5 bg-[#ec3750] hover:bg-[#d62740] disabled:opacity-60 text-white font-bold text-xs rounded-lg transition"
+                          >
+                            {shippingProjectId === proj.id ? "Shipping…" : "Ship project"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -306,6 +432,31 @@ export default function Dashboard() {
             )}
           </section>
         </div>
+
+        {role === "reviewer" && (
+          <section className="mt-12 border-t border-slate-200 pt-8">
+            <p className="uppercase tracking-widest text-xs font-bold text-[#ec3750] mb-1">Review queue</p>
+            <h2 className="text-2xl font-extrabold">Shipped projects ready to review</h2>
+            <p className="text-sm text-slate-500 mt-1">Only shipped projects appear in the reviewer queue.</p>
+            {reviewMessage && <p className="mt-3 text-sm font-semibold text-[#d62740]">{reviewMessage}</p>}
+            <div className="grid gap-4 mt-5">
+              {reviewProjects.map((project) => (
+                <article key={project.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+                  <h3 className="text-lg font-bold">{project.title}</h3>
+                  {project.description && <p className="text-sm text-slate-500 mt-1">{project.description}</p>}
+                  <div className="grid md:grid-cols-[180px_1fr_auto] gap-3 mt-4">
+                    <select value={reviewStatus[project.id] || "approved"} onChange={(event) => setReviewStatus({ ...reviewStatus, [project.id]: event.target.value })} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold">
+                      <option value="approved">Approve</option><option value="changes_requested">Request changes</option><option value="rejected">Reject</option><option value="pending">Keep pending</option>
+                    </select>
+                    <input value={reviewComment[project.id] || ""} onChange={(event) => setReviewComment({ ...reviewComment, [project.id]: event.target.value })} maxLength={2000} placeholder="Optional review note" className="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                    <button onClick={() => handleReview(project.id)} disabled={reviewingProjectId === project.id} className="rounded-xl bg-[#ec3750] px-4 py-2 text-sm font-bold text-white hover:bg-[#d62740] disabled:opacity-60">{reviewingProjectId === project.id ? "Saving…" : "Save review"}</button>
+                  </div>
+                </article>
+              ))}
+              {reviewProjects.length === 0 && <p className="rounded-2xl border-2 border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">No shipped projects are waiting for review.</p>}
+            </div>
+          </section>
+        )}
       </main>
 
       {/* Link Hackatime Modal */}

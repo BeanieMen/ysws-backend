@@ -153,8 +153,8 @@ The system uses an **NGINX Reverse-Proxy Gateway** to handle load balancing, cli
 
 ### 1. User Roles (`UserRole`)
 - **`user`**: Default role. Create projects, link Hackatime, upload banners, submit for review.
-- **`reviewer`**: All `user` permissions + browse all submitted projects (`GET /api/v1/reviews/projects`) and submit review decisions.
-- **`admin`**: Full system control. Edit/delete any user or project, update roles (`PUT /api/v1/admin/users/:id/role`).
+- **`reviewer`**: All `user` permissions + browse and review shipped projects from `/dashboard`.
+- **`admin`**: Full system control, including unshipped-project visibility and reviews, from `/admin`.
 
 ### 2. Session Management
 - **HttpOnly Cookies**: Opaque UUID session tokens are issued after OAuth authentication and stored strictly in `HttpOnly; SameSite=Lax` cookies. Session hashes (`SHA-256`) are checked in PostgreSQL (`sessions` table).
@@ -186,6 +186,7 @@ projects (
     banner_url TEXT,
     submission_status TEXT NOT NULL DEFAULT 'draft' CHECK (submission_status IN ('draft', 'submitted', 'under_review', 'approved', 'rejected')),
     submitted_at TIMESTAMPTZ,
+    shipped_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

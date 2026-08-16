@@ -17,6 +17,9 @@ pub struct Project {
     pub banner_url: Option<String>,
     pub submission_status: String,
     pub submitted_at: Option<DateTime<Utc>>,
+    pub shipped_at: Option<DateTime<Utc>>,
+    pub project_approval_status: String,
+    pub fraud_approval_status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -34,6 +37,9 @@ pub struct DashboardProject {
     pub banner_url: Option<String>,
     pub submission_status: String,
     pub submitted_at: Option<DateTime<Utc>>,
+    pub shipped_at: Option<DateTime<Utc>>,
+    pub project_approval_status: String,
+    pub fraud_approval_status: String,
     pub linked_project_names: Vec<String>,
     pub total_seconds: f64,
 }
@@ -68,8 +74,10 @@ pub struct ProjectBannerResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct SubmitProjectResponse {
+pub struct ShipProjectResponse {
     pub project_id: Uuid,
     pub submission_status: String,
-    pub submitted_at: DateTime<Utc>,
+    pub shipped_at: DateTime<Utc>,
+    pub project_approval_status: String,
+    pub fraud_approval_status: String,
 }

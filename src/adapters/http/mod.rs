@@ -1,4 +1,5 @@
 pub mod admin_handler;
+pub mod airtable_handler;
 pub mod attendance_handler;
 pub mod auth_handler;
 pub mod cookies;

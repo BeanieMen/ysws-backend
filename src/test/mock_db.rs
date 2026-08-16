@@ -28,6 +28,7 @@ pub struct MockProject {
     pub banner_url: Option<String>,
     pub submission_status: String,
     pub submitted_at: Option<DateTime<Utc>>,
+    pub shipped_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -119,6 +120,7 @@ impl MockDatabase {
             banner_url: None,
             submission_status: "draft".into(),
             submitted_at: None,
+            shipped_at: None,
             created_at: now,
             updated_at: now,
         };

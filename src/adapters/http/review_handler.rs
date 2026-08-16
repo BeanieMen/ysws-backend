@@ -22,11 +22,19 @@ pub async fn list_projects_for_review(
 ) -> ApiResult<Json<Vec<Project>>> {
     let session_user = current_session_user(&state, &headers).await?;
     require_reviewer_or_admin(&session_user)?;
-    let projects = sqlx::query_as::<_, Project>(
-        "SELECT id, owner_id, title, description, created_at, updated_at FROM projects ORDER BY created_at DESC",
-    )
-    .fetch_all(&state.db)
-    .await?;
+    let projects = if session_user.role == crate::domain::UserRole::Admin {
+        sqlx::query_as::<_, Project>(
+            "SELECT p.id, p.owner_id, p.title, p.description, p.banner_url, p.submission_status, p.submitted_at, p.shipped_at, COALESCE(s.project_approval_status, 'pending') AS project_approval_status, COALESCE(s.fraud_approval_status, 'pending') AS fraud_approval_status, p.created_at, p.updated_at FROM projects p LEFT JOIN project_shipments s ON s.project_id = p.id ORDER BY p.shipped_at DESC NULLS LAST, p.created_at DESC",
+        )
+        .fetch_all(&state.db)
+        .await?
+    } else {
+        sqlx::query_as::<_, Project>(
+            "SELECT p.id, p.owner_id, p.title, p.description, p.banner_url, p.submission_status, p.submitted_at, p.shipped_at, COALESCE(s.project_approval_status, 'pending') AS project_approval_status, COALESCE(s.fraud_approval_status, 'pending') AS fraud_approval_status, p.created_at, p.updated_at FROM projects p LEFT JOIN project_shipments s ON s.project_id = p.id WHERE p.shipped_at IS NOT NULL ORDER BY p.shipped_at DESC",
+        )
+        .fetch_all(&state.db)
+        .await?
+    };
     Ok(Json(projects))
 }
 
@@ -51,12 +59,15 @@ pub async fn create_project_review(
         ));
     }
 
-    let project_exists: Option<Uuid> = sqlx::query_scalar("SELECT id FROM projects WHERE id = $1")
+    let shipped_at: Option<Option<chrono::DateTime<chrono::Utc>>> = sqlx::query_scalar("SELECT shipped_at FROM projects WHERE id = $1")
         .bind(project_id)
         .fetch_optional(&state.db)
         .await?;
-    if project_exists.is_none() {
+    let Some(shipped_at) = shipped_at else {
         return Err(ApiError::NotFound("project not found".into()));
+    };
+    if session_user.role != crate::domain::UserRole::Admin && shipped_at.is_none() {
+        return Err(ApiError::Forbidden("reviewers may only review shipped projects".into()));
     }
 
     let review_id = Uuid::new_v4();
@@ -69,6 +80,15 @@ pub async fn create_project_review(
     .bind(&body.status)
     .bind(body.comment.map(|c| c.trim().to_owned()).filter(|c| !c.is_empty()))
     .fetch_one(&state.db)
+    .await?;
+
+    sqlx::query(
+        "UPDATE project_shipments SET project_approval_status = $1, project_reviewed_at = now(), project_reviewer_id = $2, updated_at = now() WHERE project_id = $3",
+    )
+    .bind(&review.status)
+    .bind(session_user.id)
+    .bind(project_id)
+    .execute(&state.db)
     .await?;
 
     Ok((StatusCode::CREATED, Json(review)))
@@ -85,8 +105,18 @@ pub async fn get_project_reviews(
     headers: HeaderMap,
 ) -> ApiResult<Json<Vec<ProjectReview>>> {
     let session_user = current_session_user(&state, &headers).await?;
-    own_project_or_admin(&state.db, project_id, &session_user).await
-        .or_else(|_| require_reviewer_or_admin(&session_user))?;
+    if own_project_or_admin(&state.db, project_id, &session_user).await.is_err() {
+        require_reviewer_or_admin(&session_user)?;
+        let shipped_at: Option<Option<chrono::DateTime<chrono::Utc>>> = sqlx::query_scalar("SELECT shipped_at FROM projects WHERE id = $1")
+            .bind(project_id)
+            .fetch_optional(&state.db)
+            .await?;
+        match shipped_at {
+            Some(Some(_)) => {},
+            Some(None) => return Err(ApiError::Forbidden("reviewers may only view reviews for shipped projects".into())),
+            None => return Err(ApiError::NotFound("project not found".into())),
+        }
+    }
 
     let reviews = sqlx::query_as::<_, ProjectReview>(
         "SELECT id, project_id, reviewer_id, status, comment, created_at, updated_at FROM project_reviews WHERE project_id = $1 ORDER BY updated_at DESC",

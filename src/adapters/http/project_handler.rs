@@ -3,7 +3,7 @@ use crate::{
     domain::{
         CreateProjectRequest, DashboardProject, DashboardProjectsResponse,
         HackatimeProjectsPayload, Project, ProjectBannerResponse, ProjectHackatimeResponse,
-        ProjectLapsesResponse, SetHackatimeProjectsRequest, SubmitProjectResponse,
+        ProjectLapsesResponse, SetHackatimeProjectsRequest, ShipProjectResponse,
     },
     error::{ApiError, ApiResult},
 };
@@ -28,9 +28,15 @@ pub async fn create_project(
     let user_id = current_user(&state, &headers).await?;
     validate_len(&body.title, "title", 120)?;
     ensure_user(&state.db, user_id).await?;
-    let project = sqlx::query_as::<_, Project>("INSERT INTO projects (id, owner_id, title, description) VALUES ($1, $2, $3, $4) RETURNING id, owner_id, title, description, banner_url, submission_status, submitted_at, created_at, updated_at")
+    let mut transaction = state.db.begin().await?;
+    let project = sqlx::query_as::<_, Project>("INSERT INTO projects (id, owner_id, title, description) VALUES ($1, $2, $3, $4) RETURNING id, owner_id, title, description, banner_url, submission_status, submitted_at, shipped_at, 'pending'::text AS project_approval_status, 'pending'::text AS fraud_approval_status, created_at, updated_at")
         .bind(Uuid::new_v4()).bind(user_id).bind(body.title.trim()).bind(body.description.map(|d| d.trim().to_owned()).filter(|d| !d.is_empty()))
-        .fetch_one(&state.db).await?;
+        .fetch_one(&mut *transaction).await?;
+    sqlx::query("INSERT INTO project_shipments (project_id) VALUES ($1)")
+        .bind(project.id)
+        .execute(&mut *transaction)
+        .await?;
+    transaction.commit().await?;
     Ok((StatusCode::CREATED, Json(project)))
 }
 
@@ -44,7 +50,7 @@ pub async fn list_projects(
     headers: HeaderMap,
 ) -> ApiResult<Json<DashboardProjectsResponse>> {
     let user_id = current_user(&state, &headers).await?;
-    let projects = sqlx::query_as::<_, Project>("SELECT id, owner_id, title, description, banner_url, submission_status, submitted_at, created_at, updated_at FROM projects WHERE owner_id = $1 ORDER BY created_at DESC")
+    let projects = sqlx::query_as::<_, Project>("SELECT p.id, p.owner_id, p.title, p.description, p.banner_url, p.submission_status, p.submitted_at, p.shipped_at, COALESCE(s.project_approval_status, 'pending') AS project_approval_status, COALESCE(s.fraud_approval_status, 'pending') AS fraud_approval_status, p.created_at, p.updated_at FROM projects p LEFT JOIN project_shipments s ON s.project_id = p.id WHERE p.owner_id = $1 ORDER BY p.created_at DESC")
         .bind(user_id).fetch_all(&state.db).await?;
     let available = user_hackatime_projects(&state, user_id)
         .await
@@ -72,6 +78,9 @@ pub async fn list_projects(
             banner_url: project.banner_url,
             submission_status: project.submission_status,
             submitted_at: project.submitted_at,
+            shipped_at: project.shipped_at,
+            project_approval_status: project.project_approval_status,
+            fraud_approval_status: project.fraud_approval_status,
             linked_project_names,
             total_seconds: project_seconds,
         });
@@ -306,31 +315,33 @@ pub async fn upload_project_banner(
     }))
 }
 
-/// Submits a project for review.
+/// Ships a project, making it visible to reviewers.
 ///
 /// # Errors
 ///
 /// Returns an error if authorization fails or database update fails.
-pub async fn submit_project(
+pub async fn ship_project(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,
     headers: HeaderMap,
-) -> ApiResult<Json<SubmitProjectResponse>> {
+) -> ApiResult<Json<ShipProjectResponse>> {
     let session_user = current_session_user(&state, &headers).await?;
-    own_project_or_admin(&state.db, project_id, &session_user).await?;
+    // Shipping is an owner action. Admins can still inspect every project but
+    // cannot accidentally publish work on somebody else's behalf.
+    crate::adapters::http::helpers::own_project(&state.db, project_id, session_user.id).await?;
 
-    let row = sqlx::query_as::<_, Project>(
-        "UPDATE projects SET submission_status = 'submitted', submitted_at = now(), updated_at = now() WHERE id = $1 RETURNING id, owner_id, title, description, banner_url, submission_status, submitted_at, created_at, updated_at",
+    let (submission_status, shipped_at, project_approval_status, fraud_approval_status): (String, chrono::DateTime<chrono::Utc>, String, String) = sqlx::query_as(
+        "WITH updated_project AS (UPDATE projects SET submission_status = CASE WHEN submission_status = 'draft' THEN 'submitted' ELSE submission_status END, submitted_at = COALESCE(submitted_at, now()), shipped_at = COALESCE(shipped_at, now()), updated_at = now() WHERE id = $1 RETURNING id, submission_status, shipped_at), updated_shipment AS (INSERT INTO project_shipments (project_id, shipped_at) SELECT id, shipped_at FROM updated_project ON CONFLICT (project_id) DO UPDATE SET shipped_at = COALESCE(project_shipments.shipped_at, EXCLUDED.shipped_at), updated_at = now() RETURNING shipped_at, project_approval_status, fraud_approval_status) SELECT (SELECT submission_status FROM updated_project), shipped_at, project_approval_status, fraud_approval_status FROM updated_shipment",
     )
     .bind(project_id)
     .fetch_one(&state.db)
     .await?;
 
-    let submitted_at = row.submitted_at.unwrap_or_else(chrono::Utc::now);
-
-    Ok(Json(SubmitProjectResponse {
+    Ok(Json(ShipProjectResponse {
         project_id,
-        submission_status: row.submission_status,
-        submitted_at,
+        submission_status,
+        shipped_at,
+        project_approval_status,
+        fraud_approval_status,
     }))
 }

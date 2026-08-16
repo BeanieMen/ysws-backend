@@ -1,4 +1,5 @@
 pub mod adapters;
+pub mod airtable_sync;
 pub mod cache;
 pub mod config;
 pub mod crypto;
@@ -41,13 +42,18 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::fs::create_dir_all("uploads/banners").await.ok();
 
-    let app = router(AppState {
+    let airtable_sync_interval = config.airtable_sync_interval;
+    let app_state = AppState {
         db,
         cache,
         cipher: TokenCipher::new(config.encryption_key),
         providers,
         cookie_secure: config.cookie_secure,
-    })
+    };
+    if app_state.providers.airtable_configured() {
+        tokio::spawn(airtable_sync::run_scheduler(app_state.clone(), airtable_sync_interval));
+    }
+    let app = router(app_state)
     .layer(DefaultBodyLimit::max(15 * 1024 * 1024))
     .layer(TimeoutLayer::with_status_code(
         axum::http::StatusCode::REQUEST_TIMEOUT,
