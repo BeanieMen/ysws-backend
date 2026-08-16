@@ -123,7 +123,7 @@ pub async fn user_hackatime_projects(
     let projects = state.providers.hackatime_projects(&token).await?;
     state
         .cache
-        .set_json(&cache_key, &projects, Duration::from_secs(300))
+        .set_json(&cache_key, &projects, Duration::from_mins(5))
         .await;
     Ok(projects)
 }
@@ -179,6 +179,7 @@ pub fn session_token(headers: &HeaderMap) -> Option<&str> {
         .find_map(|cookie| cookie.strip_prefix("session="))
 }
 
+#[must_use]
 pub fn token_hash(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }
@@ -204,6 +205,7 @@ pub fn normalized_names(names: Vec<String>) -> ApiResult<Vec<String>> {
     Ok(names)
 }
 
+#[must_use]
 pub fn placeholder_name(name: &str) -> bool {
     name.trim().starts_with("<<") && name.trim().ends_with(">>")
 }
@@ -215,6 +217,11 @@ pub fn validate_email(value: &str) -> ApiResult<()> {
     Ok(())
 }
 
+/// Validates length of string field.
+///
+/// # Errors
+///
+/// Returns an error if the length is 0 or exceeds `max`.
 pub fn validate_len(value: &str, field: &str, max: usize) -> ApiResult<()> {
     let length = value.trim().chars().count();
     if length == 0 || length > max {
@@ -225,6 +232,7 @@ pub fn validate_len(value: &str, field: &str, max: usize) -> ApiResult<()> {
     Ok(())
 }
 
+#[must_use]
 pub fn idempotency_cache_key(user_id: Uuid, event_id: Uuid, key: &str) -> String {
     format!(
         "idempotency:attendance:{}",

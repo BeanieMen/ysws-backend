@@ -1,5 +1,5 @@
 use crate::{
-    adapters::http::{cookies::*, helpers::*},
+    adapters::http::{cookies::{session_cookie, clear_session_cookie}, helpers::{validate_email, upsert_hackclub_user, create_session, current_user, session_token, token_hash}},
     adapters::http::AppState,
     domain::{LoginQuery, OAuthCallbackQuery, OAuthState},
     error::{ApiError, ApiResult},
@@ -29,7 +29,7 @@ pub async fn hackclub_login(
                 email: email.clone(),
                 user_id: None,
             },
-            Duration::from_secs(600),
+            Duration::from_mins(10),
         )
         .await;
     Ok(Redirect::to(
@@ -85,7 +85,7 @@ pub async fn hackatime_login(
                 email: None,
                 user_id: Some(user_id),
             },
-            Duration::from_secs(600),
+            Duration::from_mins(10),
         )
         .await;
     Ok(Redirect::to(

@@ -1,5 +1,5 @@
 use crate::{
-    adapters::http::{AppState, helpers::*},
+    adapters::http::{AppState, helpers::{current_user, user_hackatime_projects, idempotency_cache_key}},
     domain::{
         AttendanceRegistrationResponse, HackatimeProjectsPayload, RegisterAttendanceRequest,
     },
@@ -32,7 +32,7 @@ pub async fn register_attendance(
         .cache
         .increment_with_ttl(
             &format!("ratelimit:attendance:{user_id}"),
-            Duration::from_secs(60),
+            Duration::from_mins(1),
         )
         .await
         .is_some_and(|count| count > 10)
@@ -81,7 +81,7 @@ pub async fn register_attendance(
             .set_json(
                 &idempotency_cache_key(user_id, event_id, &key),
                 &response,
-                Duration::from_secs(86_400),
+                Duration::from_hours(24),
             )
             .await;
     }

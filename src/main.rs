@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shutdown_signal() {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install Ctrl+C handler");
+    if let Err(err) = tokio::signal::ctrl_c().await {
+        eprintln!("failed to install Ctrl+C handler: {err}");
+    }
 }

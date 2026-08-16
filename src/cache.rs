@@ -8,6 +8,11 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// Connects to a Redis server.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if opening or initializing the connection fails.
     pub async fn connect(url: &str) -> anyhow::Result<Self> {
         let client = redis::Client::open(url)?;
         Ok(Self {
@@ -21,12 +26,16 @@ impl Cache {
         value.and_then(|raw| serde_json::from_str(&raw).ok())
     }
 
+    #[allow(clippy::future_not_send)]
     pub async fn set_json<T: Serialize>(&self, key: &str, value: &T, ttl: Duration) {
         let Ok(value) = serde_json::to_string(value) else {
             return;
         };
-        let mut connection = self.connection.clone();
-        let _: redis::RedisResult<()> = connection.set_ex(key, value, ttl.as_secs()).await;
+        {
+            let mut connection = self.connection.clone();
+
+            let _: redis::RedisResult<()> = connection.set_ex(key, value, ttl.as_secs()).await;
+        }
     }
 
     pub async fn delete(&self, key: &str) {
@@ -62,7 +71,9 @@ impl Cache {
         let mut connection = self.connection.clone();
         let count: i64 = connection.incr(key, 1).await.ok()?;
         if count == 1 {
-            let _: redis::RedisResult<bool> = connection.expire(key, ttl.as_secs() as i64).await;
+            let _: redis::RedisResult<bool> = connection
+                .expire(key, ttl.as_secs().cast_signed())
+                .await;
         }
         Some(count)
     }

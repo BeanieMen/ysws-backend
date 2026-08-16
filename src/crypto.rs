@@ -10,10 +10,16 @@ pub struct TokenCipher {
 }
 
 impl TokenCipher {
-    pub fn new(key: [u8; 32]) -> Self {
+    #[must_use]
+    pub const fn new(key: [u8; 32]) -> Self {
         Self { key }
     }
 
+    /// Encrypts a plaintext string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key initialization or encryption fails.
     pub fn encrypt(&self, plaintext: &str) -> anyhow::Result<String> {
         let cipher = Aes256Gcm::new_from_slice(&self.key)?;
         let mut nonce = [0_u8; 12];
@@ -28,6 +34,11 @@ impl TokenCipher {
         ))
     }
 
+    /// Decrypts an encrypted token string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if format validation, base64 decoding, key initialization, or decryption fails.
     pub fn decrypt(&self, value: &str) -> anyhow::Result<String> {
         let mut parts = value.split('.');
         if parts.next() != Some("v1") {

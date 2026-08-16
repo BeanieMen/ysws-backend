@@ -1,5 +1,5 @@
 use crate::{
-    adapters::http::{AppState, helpers::*},
+    adapters::http::{AppState, helpers::{current_user, validate_len, ensure_user, user_hackatime_projects, placeholder_name, current_session_user, normalized_names, own_project_or_admin, linked_connection}},
     domain::{
         CreateProjectRequest, DashboardProject, DashboardProjectsResponse,
         HackatimeProjectsPayload, Project, ProjectBannerResponse, ProjectHackatimeResponse,
@@ -15,6 +15,11 @@ use axum::{
 use std::{sync::Arc, time::Duration};
 use uuid::Uuid;
 
+/// Creates a new project.
+///
+/// # Errors
+///
+/// Returns an error if input validation fails or database query fails.
 pub async fn create_project(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -29,6 +34,11 @@ pub async fn create_project(
     Ok((StatusCode::CREATED, Json(project)))
 }
 
+/// Lists projects for the current user.
+///
+/// # Errors
+///
+/// Returns an error if authentication fails or database query fails.
 pub async fn list_projects(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -72,6 +82,11 @@ pub async fn list_projects(
     }))
 }
 
+/// Sets linked Hackatime projects for a project.
+///
+/// # Errors
+///
+/// Returns an error if authorization fails, lock acquisition fails, or database transaction fails.
 pub async fn set_hackatime_projects(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,
@@ -115,6 +130,11 @@ pub async fn set_hackatime_projects(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Retrieves Hackatime data for a project.
+///
+/// # Errors
+///
+/// Returns an error if authorization fails or upstream service request fails.
 pub async fn get_project_hackatime(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,
@@ -142,11 +162,16 @@ pub async fn get_project_hackatime(
     };
     state
         .cache
-        .set_json(&cache_key, &result, Duration::from_secs(300))
+        .set_json(&cache_key, &result, Duration::from_mins(5))
         .await;
     Ok(Json(result))
 }
 
+/// Retrieves Lapse data for a project.
+///
+/// # Errors
+///
+/// Returns an error if authorization fails or upstream service request fails.
 pub async fn get_project_lapses(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,
@@ -174,7 +199,7 @@ pub async fn get_project_lapses(
         .timelapses;
     let linked: std::collections::HashSet<_> = names.iter().collect();
     let mut matched = Vec::new();
-    for timelapse in timelapses.iter() {
+    for timelapse in &timelapses {
         if timelapse
             .private_data
             .as_ref()
@@ -187,16 +212,21 @@ pub async fn get_project_lapses(
     matched.sort_by_key(|t| std::cmp::Reverse(t.created_at));
     let result = ProjectLapsesResponse {
         lapse_user: Some(lapse_user),
-        other_timelapse_count: timelapses.len() - matched.len(),
+        other_timelapse_count: timelapses.len().saturating_sub(matched.len()),
         timelapses: matched,
     };
     state
         .cache
-        .set_json(&cache_key, &result, Duration::from_secs(300))
+        .set_json(&cache_key, &result, Duration::from_mins(5))
         .await;
     Ok(Json(result))
 }
 
+/// Uploads a banner image for a project.
+///
+/// # Errors
+///
+/// Returns an error if file parsing fails, file size exceeds limit, or writing fails.
 pub async fn upload_project_banner(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,
@@ -276,6 +306,11 @@ pub async fn upload_project_banner(
     }))
 }
 
+/// Submits a project for review.
+///
+/// # Errors
+///
+/// Returns an error if authorization fails or database update fails.
 pub async fn submit_project(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,

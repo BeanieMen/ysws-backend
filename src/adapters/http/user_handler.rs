@@ -6,6 +6,11 @@ use crate::{
 use axum::{Json, extract::State, http::HeaderMap};
 use std::sync::Arc;
 
+/// Retrieves the profile for the currently authenticated user.
+///
+/// # Errors
+///
+/// Returns an error if the user session is invalid or database query fails.
 pub async fn current_user_profile(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,

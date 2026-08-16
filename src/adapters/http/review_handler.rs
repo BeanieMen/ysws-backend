@@ -1,5 +1,5 @@
 use crate::{
-    adapters::http::{AppState, helpers::*},
+    adapters::http::{AppState, helpers::{current_session_user, require_reviewer_or_admin, own_project_or_admin}},
     domain::{CreateProjectReviewRequest, Project, ProjectReview},
     error::{ApiError, ApiResult},
 };
@@ -11,6 +11,11 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Lists projects for review.
+///
+/// # Errors
+///
+/// Returns an error if authorization fails or database query fails.
 pub async fn list_projects_for_review(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -25,6 +30,11 @@ pub async fn list_projects_for_review(
     Ok(Json(projects))
 }
 
+/// Creates or updates a project review.
+///
+/// # Errors
+///
+/// Returns an error if input validation fails, authorization fails, or database query fails.
 pub async fn create_project_review(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,
@@ -64,6 +74,11 @@ pub async fn create_project_review(
     Ok((StatusCode::CREATED, Json(review)))
 }
 
+/// Retrieves reviews for a project.
+///
+/// # Errors
+///
+/// Returns an error if authorization fails or database query fails.
 pub async fn get_project_reviews(
     State(state): State<Arc<AppState>>,
     Path(project_id): Path<Uuid>,

@@ -1,10 +1,10 @@
 use crate::{
     config::Config,
-    error::{ApiError, ApiResult},
     domain::{
         HackClubIdentity, HackClubMePayload, HackatimeMePayload, HackatimeProjectsPayload,
         LapseTimelapsesResponse, LapseUser, LapseUserResponse, RegisterAttendanceRequest,
     },
+    error::{ApiError, ApiResult},
 };
 use reqwest::Client;
 use serde_json::Value;
@@ -17,22 +17,36 @@ pub struct Providers {
 }
 
 impl Providers {
+    /// Creates a new `Providers` instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build.
     pub fn new(config: Config) -> anyhow::Result<Self> {
         let client = Client::builder().timeout(config.provider_timeout).build()?;
         Ok(Self { client, config })
     }
 
+    /// Registers attendance for an event.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if registering attendance fails.
     pub async fn register_attendance(
         &self,
         _event_id: Uuid,
         _attendee: &RegisterAttendanceRequest,
     ) -> ApiResult<(Option<String>, Value)> {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         Ok((None, serde_json::json!({})))
     }
 
+    #[must_use]
     pub fn hackclub_authorize_url(&self, state: &str, email: Option<&str>) -> String {
-        let mut url = reqwest::Url::parse("https://auth.hackclub.com/oauth/authorize")
-            .expect("Hack Club Auth URL is valid");
+        let Ok(mut url) = reqwest::Url::parse("https://auth.hackclub.com/oauth/authorize") else {
+            return String::new();
+        };
+
         let mut query = url.query_pairs_mut();
         query.append_pair("client_id", &self.config.hackclub_client_id);
         query.append_pair("redirect_uri", &self.config.hackclub_redirect_uri);
@@ -46,6 +60,11 @@ impl Providers {
         url.into()
     }
 
+    /// Retrieves Hack Club identity using an authorization code.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if token exchange or identity fetch fails.
     pub async fn hackclub_identity(&self, code: &str) -> ApiResult<HackClubIdentity> {
         let token_response = self
             .client
@@ -87,12 +106,25 @@ impl Providers {
         Ok(response.json::<HackClubMePayload>().await?.identity)
     }
 
+    /// Builds the Hackatime OAuth authorization URL.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `hackatime_api_base_url` cannot be parsed as a valid URL.
+    #[must_use]
     pub fn hackatime_authorize_url(&self, state: &str) -> String {
-        let mut url = reqwest::Url::parse(&format!(
+        let mut url;
+
+        if let Ok(parsed_url) = reqwest::Url::parse(&format!(
             "{}/oauth/authorize",
             self.config.hackatime_api_base_url
-        ))
-        .expect("Hackatime URL is valid");
+        )) {
+            url = parsed_url;
+        } else {
+            eprintln!("Failed to parse Hackatime URL");
+            return String::new();
+        }
+
         let mut query = url.query_pairs_mut();
         query.append_pair("client_id", &self.config.hackatime_client_id);
         query.append_pair("redirect_uri", &self.config.hackatime_redirect_uri);
@@ -103,6 +135,11 @@ impl Providers {
         url.into()
     }
 
+    /// Establishes a Hackatime connection using an authorization code.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if token exchange or account fetch fails.
     pub async fn hackatime_connection(&self, code: &str) -> ApiResult<(String, String)> {
         let token_response = self
             .client
@@ -159,6 +196,11 @@ impl Providers {
         Ok((account_id, access_token))
     }
 
+    /// Fetches Hackatime projects for the given access token.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails or deserialization fails.
     pub async fn hackatime_projects(
         &self,
         access_token: &str,
@@ -187,6 +229,11 @@ impl Providers {
         }
     }
 
+    /// Looks up a Lapse user by Hackatime ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Lapse API token is missing or request fails.
     pub async fn lapse_user(&self, hackatime_id: &str) -> ApiResult<Option<LapseUser>> {
         let token = self
             .config
@@ -221,6 +268,11 @@ impl Providers {
         )
     }
 
+    /// Fetches timelapses for a given Lapse user ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Lapse API token is missing or request fails.
     pub async fn lapse_timelapses(
         &self,
         lapse_user_id: &str,

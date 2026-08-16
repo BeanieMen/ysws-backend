@@ -24,12 +24,22 @@ pub struct Config {
 }
 
 impl Config {
+    /// Loads application configuration from environment variables.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a required environment variable is missing, if
+    /// `APP_ENCRYPTION_KEY` is not valid hexadecimal or is not exactly 32 bytes,
+    /// or if `PORT` cannot be parsed as a valid port number.
     pub fn from_env() -> anyhow::Result<Self> {
         dotenvy::dotenv().ok();
+
         let encryption_key = env::var("APP_ENCRYPTION_KEY")
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be configured"))?;
+
         let bytes = hex::decode(encryption_key)
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be hexadecimal"))?;
+
         let encryption_key: [u8; 32] = bytes
             .try_into()
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be exactly 32 bytes"))?;
@@ -52,8 +62,7 @@ impl Config {
             hackatime_client_secret: required("HACKATIME_CLIENT_SECRET")?,
             hackatime_redirect_uri: required("HACKATIME_REDIRECT_URI")?,
             cookie_secure: env::var("COOKIE_SECURE")
-                .map(|value| value == "true" || value == "1")
-                .unwrap_or(false),
+                .is_ok_and(|value| value == "true" || value == "1"),
             lapse_api_base_url: env_or("LAPSE_API_BASE_URL", "https://api.lapse.hackclub.com"),
             lapse_api_token: env::var("LAPSE_API_TOKEN").ok().filter(|s| !s.is_empty()),
             provider_timeout: Duration::from_secs(10),
