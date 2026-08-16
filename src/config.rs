@@ -4,6 +4,7 @@ use std::{env, time::Duration};
 pub struct Config {
     pub database_url: String,
     pub redis_url: String,
+    pub app_url: String,
     pub port: u16,
     pub encryption_key: [u8; 32],
     #[allow(dead_code)]
@@ -52,9 +53,12 @@ impl Config {
             .try_into()
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be exactly 32 bytes"))?;
 
+        let app_url = env_or("APP_URL", "http://localhost:3000");
+
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
+            app_url: app_url.clone(),
             port: env::var("PORT").unwrap_or_else(|_| "3000".into()).parse()?,
             encryption_key,
             attend_api_base_url: env_or("ATTEND_API_BASE_URL", "https://attend.hackclub.com"),
@@ -65,10 +69,10 @@ impl Config {
             ),
             hackclub_client_id: required("HACKCLUB_CLIENT_ID")?,
             hackclub_client_secret: required("HACKCLUB_CLIENT_SECRET")?,
-            hackclub_redirect_uri: required("HACKCLUB_REDIRECT_URI")?,
+            hackclub_redirect_uri: format!("{app_url}/auth/hackclub/callback"),
             hackatime_client_id: required("HACKATIME_CLIENT_ID")?,
             hackatime_client_secret: required("HACKATIME_CLIENT_SECRET")?,
-            hackatime_redirect_uri: required("HACKATIME_REDIRECT_URI")?,
+            hackatime_redirect_uri: format!("{app_url}/auth/hackatime/callback"),
             cookie_secure: env::var("COOKIE_SECURE")
                 .is_ok_and(|value| value == "true" || value == "1"),
             lapse_api_base_url: env_or("LAPSE_API_BASE_URL", "https://api.lapse.hackclub.com"),

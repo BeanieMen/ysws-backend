@@ -44,6 +44,11 @@ docker compose up postgres redis -d
 cargo run
 ```
 
+Set `APP_URL` to the public frontend origin (for example,
+`http://localhost:3001` during local development). Both OAuth callback URLs are
+derived from it, so it must match the URL registered with Hack Club and
+Hackatime.
+
 ---
 
 ## 🔐 User Roles (RBAC)
