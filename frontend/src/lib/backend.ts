@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+export const backendUrl = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
+
 
 /**
  * Proxies only the headers the Rust API needs. In particular, it forwards the

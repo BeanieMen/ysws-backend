@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-
-const backendUrl = process.env.BACKEND_URL || "http://127.0.0.1:8000";
+import { backendUrl } from "@/lib/backend";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = (await cookies()).get("session")?.value;
