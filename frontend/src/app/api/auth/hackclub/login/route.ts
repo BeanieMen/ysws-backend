@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { backendUrl } from "@/lib/backend";
+import { NextRequest } from "next/server";
+import { backendFetch, proxyResponse } from "@/lib/backend";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const targetUrl = `${backendUrl}/auth/hackclub/login${url.search}`;
-  return NextResponse.redirect(targetUrl);
+  return proxyResponse(await backendFetch(request, `/auth/hackclub/login${url.search}`));
 }

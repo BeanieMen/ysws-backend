@@ -5,6 +5,7 @@ pub struct Config {
     pub database_url: String,
     pub redis_url: String,
     pub app_url: String,
+    pub backend_url: String,
     pub port: u16,
     pub encryption_key: [u8; 32],
     #[allow(dead_code)]
@@ -54,12 +55,24 @@ impl Config {
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be exactly 32 bytes"))?;
 
         let app_url = env_or("APP_URL", "http://localhost:3000");
+        let backend_url = env_or("BACKEND_URL", "http://localhost:8000");
+
+        let hackclub_redirect_uri = env::var("HACKCLUB_REDIRECT_URI")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| format!("{app_url}/auth/hackclub/callback"));
+
+        let hackatime_redirect_uri = env::var("HACKATIME_REDIRECT_URI")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| format!("{app_url}/auth/hackatime/callback"));
 
         Ok(Self {
             database_url: required("DATABASE_URL")?,
             redis_url: required("REDIS_URL")?,
             app_url: app_url.clone(),
-            port: env::var("PORT").unwrap_or_else(|_| "3000".into()).parse()?,
+            backend_url: backend_url.clone(),
+            port: env::var("PORT").unwrap_or_else(|_| "8000".into()).parse()?,
             encryption_key,
             attend_api_base_url: env_or("ATTEND_API_BASE_URL", "https://attend.hackclub.com"),
             attend_api_key: env_or("ATTEND_API_KEY", ""),
@@ -69,10 +82,10 @@ impl Config {
             ),
             hackclub_client_id: required("HACKCLUB_CLIENT_ID")?,
             hackclub_client_secret: required("HACKCLUB_CLIENT_SECRET")?,
-            hackclub_redirect_uri: format!("{app_url}/auth/hackclub/callback"),
+            hackclub_redirect_uri,
             hackatime_client_id: required("HACKATIME_CLIENT_ID")?,
             hackatime_client_secret: required("HACKATIME_CLIENT_SECRET")?,
-            hackatime_redirect_uri: format!("{app_url}/auth/hackatime/callback"),
+            hackatime_redirect_uri,
             cookie_secure: env::var("COOKIE_SECURE")
                 .is_ok_and(|value| value == "true" || value == "1"),
             lapse_api_base_url: env_or("LAPSE_API_BASE_URL", "https://api.lapse.hackclub.com"),

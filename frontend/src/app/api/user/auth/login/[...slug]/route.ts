@@ -1,16 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { backendUrl } from "@/lib/backend";
+import { NextRequest } from "next/server";
+import { backendFetch, proxyResponse } from "@/lib/backend";
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const email = searchParams.get("email") || "";
-
-  const targetUrl = new URL(`${backendUrl}/auth/hackclub/login`);
-  if (email) {
-    targetUrl.searchParams.set("email", email);
-  }
-
-  return NextResponse.redirect(targetUrl.toString());
+  const url = new URL(request.url);
+  return proxyResponse(await backendFetch(request, `/auth/hackclub/login${url.search}`));
 }
 
 export async function POST(request: NextRequest) {
