@@ -7,6 +7,7 @@ pub mod domain;
 pub mod error;
 pub mod ports;
 pub mod providers;
+pub mod test;
 
 use crate::{
     adapters::http::{AppState, router},

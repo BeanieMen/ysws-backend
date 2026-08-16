@@ -24,7 +24,7 @@ pub struct HackClubMePayload {
     pub identity: HackClubIdentity,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct HackClubIdentity {
     pub id: String,
     pub first_name: Option<String>,
