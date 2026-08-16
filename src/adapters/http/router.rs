@@ -1,7 +1,7 @@
 use crate::{
     adapters::http::{
-        admin_handler, airtable_handler, attendance_handler, auth_handler, health_handler, project_handler,
-        review_handler, user_handler,
+        admin_handler, airtable_handler, attendance_handler, auth_handler, health_handler,
+        project_handler, review_handler, user_handler,
     },
     ports::{CachePort, CryptoPort, DbPort, ProvidersPort},
 };
@@ -85,7 +85,10 @@ pub fn router(state: AppState) -> Router {
         )
         // Admin-only endpoints
         .route("/api/v1/admin/users", get(admin_handler::list_users))
-        .route("/api/v1/admin/airtable/sync", post(airtable_handler::sync_airtable))
+        .route(
+            "/api/v1/admin/airtable/sync",
+            post(airtable_handler::sync_airtable),
+        )
         .route(
             "/api/v1/admin/users/{user_id}/role",
             put(admin_handler::update_user_role),

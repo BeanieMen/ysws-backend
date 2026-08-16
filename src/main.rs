@@ -51,23 +51,26 @@ async fn main() -> anyhow::Result<()> {
         cookie_secure: config.cookie_secure,
     };
     if app_state.providers.airtable_configured() {
-        tokio::spawn(airtable_sync::run_scheduler(app_state.clone(), airtable_sync_interval));
+        tokio::spawn(airtable_sync::run_scheduler(
+            app_state.clone(),
+            airtable_sync_interval,
+        ));
     }
     let app = router(app_state)
-    .layer(DefaultBodyLimit::max(15 * 1024 * 1024))
-    .layer(TimeoutLayer::with_status_code(
-        axum::http::StatusCode::REQUEST_TIMEOUT,
-        Duration::from_secs(30),
-    ))
-    .layer(PropagateRequestIdLayer::new(
-        axum::http::HeaderName::from_static("x-request-id"),
-    ))
-    .layer(SetRequestIdLayer::new(
-        axum::http::HeaderName::from_static("x-request-id"),
-        MakeRequestUuid,
-    ))
-    .layer(TraceLayer::new_for_http())
-    .layer(CorsLayer::very_permissive());
+        .layer(DefaultBodyLimit::max(15 * 1024 * 1024))
+        .layer(TimeoutLayer::with_status_code(
+            axum::http::StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(30),
+        ))
+        .layer(PropagateRequestIdLayer::new(
+            axum::http::HeaderName::from_static("x-request-id"),
+        ))
+        .layer(SetRequestIdLayer::new(
+            axum::http::HeaderName::from_static("x-request-id"),
+            MakeRequestUuid,
+        ))
+        .layer(TraceLayer::new_for_http())
+        .layer(CorsLayer::very_permissive());
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port)).await?;
     info!(port = config.port, "test-instance API listening");
     axum::serve(listener, app)

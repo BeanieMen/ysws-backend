@@ -1,5 +1,8 @@
 use crate::{
-    adapters::http::{AppState, helpers::{current_session_user, require_admin}},
+    adapters::http::{
+        AppState,
+        helpers::{current_session_user, require_admin},
+    },
     airtable_sync::{self, AirtableSyncReport},
     error::ApiResult,
 };

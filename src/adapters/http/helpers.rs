@@ -39,7 +39,11 @@ pub async fn own_project(db: &PgPool, project_id: Uuid, user_id: Uuid) -> ApiRes
     }
 }
 
-pub async fn own_project_or_admin(db: &PgPool, project_id: Uuid, session_user: &SessionUser) -> ApiResult<()> {
+pub async fn own_project_or_admin(
+    db: &PgPool,
+    project_id: Uuid,
+    session_user: &SessionUser,
+) -> ApiResult<()> {
     if session_user.role == UserRole::Admin {
         let exists: Option<Uuid> = sqlx::query_scalar("SELECT id FROM projects WHERE id = $1")
             .bind(project_id)
@@ -65,7 +69,9 @@ pub fn require_reviewer_or_admin(user: &SessionUser) -> ApiResult<()> {
     if user.role == UserRole::Reviewer || user.role == UserRole::Admin {
         Ok(())
     } else {
-        Err(ApiError::Forbidden("reviewer or admin privileges required".into()))
+        Err(ApiError::Forbidden(
+            "reviewer or admin privileges required".into(),
+        ))
     }
 }
 

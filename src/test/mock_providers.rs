@@ -1,11 +1,17 @@
-#![allow(clippy::unwrap_used, clippy::unused_async, clippy::must_use_candidate, clippy::missing_panics_doc)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::must_use_candidate,
+    clippy::missing_panics_doc
+)]
 
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use serde_json::Value;
 
 use crate::domain::{
-    HackClubIdentity, HackatimeProject, HackatimeProjectsPayload, LapseTimelapsesResponse, LapseUser,
+    HackClubIdentity, HackatimeProject, HackatimeProjectsPayload, LapseTimelapsesResponse,
+    LapseUser,
 };
 use crate::error::{ApiError, ApiResult};
 
@@ -26,7 +32,10 @@ impl MockProviders {
 
     /// Registers a mock Hack Club OAuth code.
     pub fn register_hackclub_code(&self, code: impl Into<String>, identity: HackClubIdentity) {
-        self.oauth_codes.lock().unwrap().insert(code.into(), identity);
+        self.oauth_codes
+            .lock()
+            .unwrap()
+            .insert(code.into(), identity);
     }
 
     /// Simulates Hack Club identity retrieval.
@@ -44,7 +53,12 @@ impl MockProviders {
     }
 
     /// Registers a mock Hackatime OAuth code.
-    pub fn register_hackatime_code(&self, code: impl Into<String>, account_id: impl Into<String>, token: impl Into<String>) {
+    pub fn register_hackatime_code(
+        &self,
+        code: impl Into<String>,
+        account_id: impl Into<String>,
+        token: impl Into<String>,
+    ) {
         self.hackatime_codes
             .lock()
             .unwrap()
@@ -66,8 +80,15 @@ impl MockProviders {
     }
 
     /// Registers mock projects for a Hackatime access token.
-    pub fn set_hackatime_projects(&self, token: impl Into<String>, projects: Vec<HackatimeProject>) {
-        self.hackatime_projects_data.lock().unwrap().insert(token.into(), projects);
+    pub fn set_hackatime_projects(
+        &self,
+        token: impl Into<String>,
+        projects: Vec<HackatimeProject>,
+    ) {
+        self.hackatime_projects_data
+            .lock()
+            .unwrap()
+            .insert(token.into(), projects);
     }
 
     /// Simulates fetching Hackatime projects.
@@ -75,7 +96,10 @@ impl MockProviders {
     /// # Errors
     ///
     /// Returns `ApiError::Upstream` if the access token is invalid or has no projects.
-    pub async fn hackatime_projects(&self, access_token: &str) -> ApiResult<HackatimeProjectsPayload> {
+    pub async fn hackatime_projects(
+        &self,
+        access_token: &str,
+    ) -> ApiResult<HackatimeProjectsPayload> {
         let projects = self
             .hackatime_projects_data
             .lock()

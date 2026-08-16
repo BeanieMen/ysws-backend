@@ -1,5 +1,11 @@
 use crate::{
-    adapters::http::{AppState, helpers::{current_user, validate_len, ensure_user, user_hackatime_projects, placeholder_name, current_session_user, normalized_names, own_project_or_admin, linked_connection}},
+    adapters::http::{
+        AppState,
+        helpers::{
+            current_session_user, current_user, ensure_user, linked_connection, normalized_names,
+            own_project_or_admin, placeholder_name, user_hackatime_projects, validate_len,
+        },
+    },
     domain::{
         CreateProjectRequest, DashboardProject, DashboardProjectsResponse,
         HackatimeProjectsPayload, Project, ProjectBannerResponse, ProjectHackatimeResponse,
@@ -282,7 +288,9 @@ pub async fn upload_project_banner(
     }
 
     if file_data.len() > 10 * 1024 * 1024 {
-        return Err(ApiError::BadRequest("banner image exceeds maximum limit of 10MB".into()));
+        return Err(ApiError::BadRequest(
+            "banner image exceeds maximum limit of 10MB".into(),
+        ));
     }
 
     let upload_dir = std::path::Path::new("uploads/banners");

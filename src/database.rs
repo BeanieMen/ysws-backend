@@ -1,5 +1,5 @@
-use std::time::Duration;
 use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::time::Duration;
 
 /// Connects to `PostgreSQL` database and runs pending migrations.
 ///

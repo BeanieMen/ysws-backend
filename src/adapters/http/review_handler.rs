@@ -1,5 +1,8 @@
 use crate::{
-    adapters::http::{AppState, helpers::{current_session_user, require_reviewer_or_admin, own_project_or_admin}},
+    adapters::http::{
+        AppState,
+        helpers::{current_session_user, own_project_or_admin, require_reviewer_or_admin},
+    },
     domain::{CreateProjectReviewRequest, Project, ProjectReview},
     error::{ApiError, ApiResult},
 };
@@ -55,19 +58,23 @@ pub async fn create_project_review(
     let valid_statuses = ["pending", "approved", "rejected", "changes_requested"];
     if !valid_statuses.contains(&body.status.as_str()) {
         return Err(ApiError::BadRequest(
-            "invalid review status; must be pending, approved, rejected, or changes_requested".into(),
+            "invalid review status; must be pending, approved, rejected, or changes_requested"
+                .into(),
         ));
     }
 
-    let shipped_at: Option<Option<chrono::DateTime<chrono::Utc>>> = sqlx::query_scalar("SELECT shipped_at FROM projects WHERE id = $1")
-        .bind(project_id)
-        .fetch_optional(&state.db)
-        .await?;
+    let shipped_at: Option<Option<chrono::DateTime<chrono::Utc>>> =
+        sqlx::query_scalar("SELECT shipped_at FROM projects WHERE id = $1")
+            .bind(project_id)
+            .fetch_optional(&state.db)
+            .await?;
     let Some(shipped_at) = shipped_at else {
         return Err(ApiError::NotFound("project not found".into()));
     };
     if session_user.role != crate::domain::UserRole::Admin && shipped_at.is_none() {
-        return Err(ApiError::Forbidden("reviewers may only review shipped projects".into()));
+        return Err(ApiError::Forbidden(
+            "reviewers may only review shipped projects".into(),
+        ));
     }
 
     let review_id = Uuid::new_v4();
@@ -105,15 +112,23 @@ pub async fn get_project_reviews(
     headers: HeaderMap,
 ) -> ApiResult<Json<Vec<ProjectReview>>> {
     let session_user = current_session_user(&state, &headers).await?;
-    if own_project_or_admin(&state.db, project_id, &session_user).await.is_err() {
+    if own_project_or_admin(&state.db, project_id, &session_user)
+        .await
+        .is_err()
+    {
         require_reviewer_or_admin(&session_user)?;
-        let shipped_at: Option<Option<chrono::DateTime<chrono::Utc>>> = sqlx::query_scalar("SELECT shipped_at FROM projects WHERE id = $1")
-            .bind(project_id)
-            .fetch_optional(&state.db)
-            .await?;
+        let shipped_at: Option<Option<chrono::DateTime<chrono::Utc>>> =
+            sqlx::query_scalar("SELECT shipped_at FROM projects WHERE id = $1")
+                .bind(project_id)
+                .fetch_optional(&state.db)
+                .await?;
         match shipped_at {
-            Some(Some(_)) => {},
-            Some(None) => return Err(ApiError::Forbidden("reviewers may only view reviews for shipped projects".into())),
+            Some(Some(_)) => {}
+            Some(None) => {
+                return Err(ApiError::Forbidden(
+                    "reviewers may only view reviews for shipped projects".into(),
+                ));
+            }
             None => return Err(ApiError::NotFound("project not found".into())),
         }
     }

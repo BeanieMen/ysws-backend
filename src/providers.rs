@@ -58,7 +58,7 @@ impl Providers {
     }
 
     #[must_use]
-    pub fn airtable_configured(&self) -> bool {
+    pub const fn airtable_configured(&self) -> bool {
         self.config.airtable_api_key.is_some() && self.config.airtable_base_id.is_some()
     }
 
@@ -82,7 +82,7 @@ impl Providers {
             .map_err(|error| ApiError::Internal(error.into()))?;
         let mut segments = url
             .path_segments_mut()
-            .map_err(|_| ApiError::Internal(anyhow::anyhow!("invalid Airtable URL")))?;
+            .map_err(|()| ApiError::Internal(anyhow::anyhow!("invalid Airtable URL")))?;
         segments.push("v0");
         segments.push(base_id);
         segments.push(table);
@@ -101,7 +101,7 @@ impl Providers {
         if let Some(record_id) = record_id {
             let mut segments = url
                 .path_segments_mut()
-                .map_err(|_| ApiError::Internal(anyhow::anyhow!("invalid Airtable URL")))?;
+                .map_err(|()| ApiError::Internal(anyhow::anyhow!("invalid Airtable URL")))?;
             segments.push(record_id);
         }
         let request = if record_id.is_some() {
@@ -124,7 +124,9 @@ impl Providers {
         body.get("id")
             .and_then(Value::as_str)
             .map(str::to_owned)
-            .ok_or_else(|| ApiError::Upstream("Airtable response did not include a record id".into()))
+            .ok_or_else(|| {
+                ApiError::Upstream("Airtable response did not include a record id".into())
+            })
     }
 
     /// Creates or updates the participant record that corresponds to a local user.
@@ -138,8 +140,14 @@ impl Providers {
             Value::String(participant.id.to_string()),
         );
         fields.insert("Email".into(), Value::String(participant.email.clone()));
-        fields.insert("First Name".into(), Value::String(participant.first_name.clone()));
-        fields.insert("Last Name".into(), Value::String(participant.last_name.clone()));
+        fields.insert(
+            "First Name".into(),
+            Value::String(participant.first_name.clone()),
+        );
+        fields.insert(
+            "Last Name".into(),
+            Value::String(participant.last_name.clone()),
+        );
         self.upsert_airtable_record(
             &self.config.airtable_participants_table,
             participant.record_id.as_deref(),
@@ -161,14 +169,23 @@ impl Providers {
             self.config.airtable_project_id_field.clone(),
             Value::String(project.id.to_string()),
         );
-        fields.insert("Owner ID".into(), Value::String(project.owner_id.to_string()));
-        fields.insert("Participant Email".into(), Value::String(project.owner_email.clone()));
+        fields.insert(
+            "Owner ID".into(),
+            Value::String(project.owner_id.to_string()),
+        );
+        fields.insert(
+            "Participant Email".into(),
+            Value::String(project.owner_email.clone()),
+        );
         fields.insert("Title".into(), Value::String(project.title.clone()));
         fields.insert(
             "Description".into(),
             Value::String(project.description.clone().unwrap_or_default()),
         );
-        fields.insert("Shipped At".into(), Value::String(project.shipped_at.to_rfc3339()));
+        fields.insert(
+            "Shipped At".into(),
+            Value::String(project.shipped_at.to_rfc3339()),
+        );
         fields.insert(
             "Project Approval".into(),
             Value::String(project.project_approval_status.clone()),
@@ -208,7 +225,9 @@ impl Providers {
             let records = body
                 .get("records")
                 .and_then(Value::as_array)
-                .ok_or_else(|| ApiError::Upstream("Airtable response did not include records".into()))?;
+                .ok_or_else(|| {
+                    ApiError::Upstream("Airtable response did not include records".into())
+                })?;
             for record in records {
                 let Some(record_id) = record.get("id").and_then(Value::as_str) else {
                     continue;
@@ -234,7 +253,10 @@ impl Providers {
                     status,
                 });
             }
-            offset = body.get("offset").and_then(Value::as_str).map(str::to_owned);
+            offset = body
+                .get("offset")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
             if offset.is_none() {
                 return Ok(statuses);
             }

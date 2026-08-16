@@ -1,8 +1,9 @@
 use crate::{
-    adapters::http::{AppState, helpers::{current_user, user_hackatime_projects, idempotency_cache_key}},
-    domain::{
-        AttendanceRegistrationResponse, HackatimeProjectsPayload, RegisterAttendanceRequest,
+    adapters::http::{
+        AppState,
+        helpers::{current_user, idempotency_cache_key, user_hackatime_projects},
     },
+    domain::{AttendanceRegistrationResponse, HackatimeProjectsPayload, RegisterAttendanceRequest},
     error::{ApiError, ApiResult},
 };
 use axum::{

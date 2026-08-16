@@ -1,10 +1,16 @@
-#![allow(clippy::unwrap_used, clippy::unused_async, clippy::must_use_candidate, clippy::missing_panics_doc, clippy::significant_drop_tightening)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::unused_async,
+    clippy::must_use_candidate,
+    clippy::missing_panics_doc,
+    clippy::significant_drop_tightening
+)]
 
+use chrono::{DateTime, Utc};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use serde_json::Value;
 
 use crate::domain::{HackClubIdentity, UserRole};
 
@@ -108,7 +114,12 @@ impl MockDatabase {
     }
 
     /// Inserts a project in the mock database.
-    pub fn create_project(&self, owner_id: Uuid, title: String, description: Option<String>) -> MockProject {
+    pub fn create_project(
+        &self,
+        owner_id: Uuid,
+        title: String,
+        description: Option<String>,
+    ) -> MockProject {
         let mut projects = self.projects.lock().unwrap();
         let id = Uuid::new_v4();
         let now = Utc::now();
@@ -138,13 +149,16 @@ impl MockDatabase {
     pub fn save_hackatime_connection(&self, user_id: Uuid, account_id: String, ciphertext: String) {
         let mut conns = self.hackatime_connections.lock().unwrap();
         let now = Utc::now();
-        conns.insert(user_id, MockHackatimeConnection {
+        conns.insert(
             user_id,
-            account_id,
-            access_token_ciphertext: ciphertext,
-            connected_at: now,
-            updated_at: now,
-        });
+            MockHackatimeConnection {
+                user_id,
+                account_id,
+                access_token_ciphertext: ciphertext,
+                connected_at: now,
+                updated_at: now,
+            },
+        );
     }
 
     /// Retrieves a user by ID.

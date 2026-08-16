@@ -6,7 +6,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::FromRow;
-use tracing::{debug, info, info_span, warn, Instrument};
+use tracing::{Instrument, debug, info, info_span, warn};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -218,44 +218,42 @@ async fn sync_projects(state: &AppState) -> ApiResult<usize> {
 }
 
 async fn sync_fraud_statuses(state: &AppState) -> ApiResult<usize> {
-    let records = state.providers.airtable_fraud_statuses().await.map_err(|error| {
-        warn!(%error, "failed to fetch fraud statuses from Airtable");
-        error
-    })?;
+    let records = state
+        .providers
+        .airtable_fraud_statuses()
+        .await
+        .map_err(|error| {
+            warn!(%error, "failed to fetch fraud statuses from Airtable");
+            error
+        })?;
 
     let fetched = records.len();
     info!(fetched, "fetched fraud status records from Airtable");
 
-    let mut updated = 0;
-    let mut skipped_invalid_id = 0;
-    let mut skipped_invalid_status = 0;
+    let mut updated: usize = 0;
+    let mut skipped_invalid_id: usize = 0;
+    let mut skipped_invalid_status: usize = 0;
 
     for record in records {
-        let project_id = match Uuid::parse_str(&record.project_id) {
-            Ok(id) => id,
-            Err(_) => {
-                warn!(
-                    project_id = %record.project_id,
-                    airtable_record_id = %record.record_id,
-                    "skipping Airtable record: invalid project UUID"
-                );
-                skipped_invalid_id += 1;
-                continue;
-            }
+        let Ok(project_id) = Uuid::parse_str(&record.project_id) else {
+            warn!(
+                project_id = %record.project_id,
+                airtable_record_id = %record.record_id,
+                "skipping Airtable record: invalid project UUID"
+            );
+            skipped_invalid_id = skipped_invalid_id.saturating_add(1);
+            continue;
         };
 
-        let status = match normalized_fraud_status(&record.status) {
-            Some(s) => s,
-            None => {
-                warn!(
-                    %project_id,
-                    raw_status = %record.status,
-                    airtable_record_id = %record.record_id,
-                    "skipping Airtable record: unrecognised fraud status value"
-                );
-                skipped_invalid_status += 1;
-                continue;
-            }
+        let Some(status) = normalized_fraud_status(&record.status) else {
+            warn!(
+                %project_id,
+                raw_status = %record.status,
+                airtable_record_id = %record.record_id,
+                "skipping Airtable record: unrecognised fraud status value"
+            );
+            skipped_invalid_status = skipped_invalid_status.saturating_add(1);
+            continue;
         };
 
         debug!(
@@ -293,21 +291,21 @@ async fn sync_fraud_statuses(state: &AppState) -> ApiResult<usize> {
         } else {
             debug!(%project_id, fraud_status = status, "fraud status updated in DB");
         }
-        updated += rows as usize;
+        updated = updated.saturating_add(usize::try_from(rows).unwrap_or(0));
     }
 
     info!(
         fetched,
-        updated,
-        skipped_invalid_id,
-        skipped_invalid_status,
-        "fraud statuses phase complete"
+        updated, skipped_invalid_id, skipped_invalid_status, "fraud statuses phase complete"
     );
     Ok(updated)
 }
 
 pub async fn run_scheduler(state: AppState, interval: std::time::Duration) {
-    info!(interval_secs = interval.as_secs(), "Airtable sync scheduler started");
+    info!(
+        interval_secs = interval.as_secs(),
+        "Airtable sync scheduler started"
+    );
     let mut ticker = tokio::time::interval(interval);
     loop {
         ticker.tick().await;
@@ -319,7 +317,12 @@ pub async fn run_scheduler(state: AppState, interval: std::time::Duration) {
 }
 
 fn normalized_fraud_status(value: &str) -> Option<&'static str> {
-    match value.trim().to_ascii_lowercase().replace(['-', ' '], "_").as_str() {
+    match value
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', ' '], "_")
+        .as_str()
+    {
         "approved" | "approve" | "clear" | "passed" | "pass" | "true" => Some("approved"),
         "rejected" | "reject" | "failed" | "fraud" | "blocked" | "false" => Some("rejected"),
         "pending" | "in_review" | "needs_review" | "" => Some("pending"),

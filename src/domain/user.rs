@@ -13,7 +13,6 @@ pub enum UserRole {
     Admin,
 }
 
-
 impl fmt::Display for UserRole {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -80,6 +79,7 @@ pub struct AdminUpdateUserRequest {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

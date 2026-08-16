@@ -71,9 +71,8 @@ impl Cache {
         let mut connection = self.connection.clone();
         let count: i64 = connection.incr(key, 1).await.ok()?;
         if count == 1 {
-            let _: redis::RedisResult<bool> = connection
-                .expire(key, ttl.as_secs().cast_signed())
-                .await;
+            let _: redis::RedisResult<bool> =
+                connection.expire(key, ttl.as_secs().cast_signed()).await;
         }
         Some(count)
     }

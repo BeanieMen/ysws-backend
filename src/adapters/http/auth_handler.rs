@@ -1,6 +1,12 @@
 use crate::{
-    adapters::http::{cookies::{session_cookie, clear_session_cookie}, helpers::{validate_email, upsert_hackclub_user, create_session, current_user, session_token, token_hash}},
     adapters::http::AppState,
+    adapters::http::{
+        cookies::{clear_session_cookie, session_cookie},
+        helpers::{
+            create_session, current_user, session_token, token_hash, upsert_hackclub_user,
+            validate_email,
+        },
+    },
     domain::{LoginQuery, OAuthCallbackQuery, OAuthState},
     error::{ApiError, ApiResult},
 };
@@ -106,13 +112,14 @@ pub async fn hackatime_callback(
         .state
         .ok_or_else(|| ApiError::BadRequest("missing OAuth state".into()))?;
     let state_cache_key = format!("oauth:hackatime:{state_key}");
-    let oauth_state: OAuthState = state
-        .cache
-        .get_json(&state_cache_key)
-        .await
-        .ok_or_else(|| {
-            ApiError::Unauthorized("Hackatime connection link expired; start again".into())
-        })?;
+    let oauth_state: OAuthState =
+        state
+            .cache
+            .get_json(&state_cache_key)
+            .await
+            .ok_or_else(|| {
+                ApiError::Unauthorized("Hackatime connection link expired; start again".into())
+            })?;
     state.cache.delete(&state_cache_key).await;
     let user_id = oauth_state
         .user_id
