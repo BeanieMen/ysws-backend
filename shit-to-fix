@@ -1,7 +1,0 @@
-{
-    2026-08-16T11:25:14.507423Z  INFO test_instance: test-instance API listening port=8000
-    2026-08-16T11:25:17.238311Z  WARN test_instance::airtable_sync: Airtable sync failed error=Airtable fraud-status request failed with 403 Forbidden
-    2026-08-16T11:30:16.581806Z  WARN test_instance::airtable_sync: Airtable sync failed error=Airtable fraud-status request failed with 403 Forbidden
-
-    fix these forbidden requests and find out where they come from
-}
