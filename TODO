@@ -1,20 +1,20 @@
-airtable — sync pipeline for participant/project records
-announcements
-balance
-community-events
-events
-fraud-review — fraud flagging/verdicts
-gift-codes
-github
-huddles
-integrations
 loops (email/marketing)
 manifest
-metrics
-posthog — analytics tracking
+document
+permission
+
 shop
+streaks
+
+ticket-qualify-email
+posthog — analytics tracking
+metrics
+
 slack
 slack-channels
-streaks
-submission-approval
-ticket-qualify-email
+huddles
+
+frontend
+design
+theme
+mascot
