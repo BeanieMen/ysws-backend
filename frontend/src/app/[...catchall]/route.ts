@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { backendFetch, proxyResponse } from "@/lib/backend";
+import { config } from "dotenv";
+config();
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -9,7 +11,10 @@ export async function GET(request: NextRequest) {
   // If path starts with /api/user/auth/login or /auth/hackclub/login
   if (pathname.includes("auth/login") || pathname.includes("hackclub/login")) {
     const email = url.searchParams.get("email") || "";
-    const targetUrl = new URL("/api/auth/hackclub/login", url.origin);
+
+    const targetUrl = process.env.APP_URL
+      ? new URL(process.env.APP_URL)
+      : new URL("/api/auth/hackclub/login", url.origin);
     if (email) targetUrl.searchParams.set("email", email);
     return NextResponse.redirect(targetUrl.toString());
   }
