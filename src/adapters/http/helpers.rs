@@ -12,6 +12,12 @@ use sqlx::{PgPool, Row};
 use std::time::Duration;
 use uuid::Uuid;
 
+pub struct UpsertedHackClubUser {
+    pub id: Uuid,
+    pub email: String,
+    pub created: bool,
+}
+
 pub async fn current_session_user(state: &AppState, headers: &HeaderMap) -> ApiResult<SessionUser> {
     let token = session_token(headers)
         .ok_or_else(|| ApiError::Unauthorized("sign in with Hack Club first".into()))?;
@@ -136,7 +142,10 @@ pub async fn user_hackatime_projects(
     Ok(projects)
 }
 
-pub async fn upsert_hackclub_user(db: &PgPool, identity: HackClubIdentity) -> ApiResult<Uuid> {
+pub async fn upsert_hackclub_user(
+    db: &PgPool,
+    identity: HackClubIdentity,
+) -> ApiResult<UpsertedHackClubUser> {
     let email = identity
         .primary_email
         .ok_or_else(|| ApiError::BadRequest("Hack Club did not grant access to your email".into()))?
@@ -154,8 +163,12 @@ pub async fn upsert_hackclub_user(db: &PgPool, identity: HackClubIdentity) -> Ap
     .await?;
     if let Some(id) = existing_id {
         sqlx::query("UPDATE users SET hca_id = $1, email = $2, first_name = $3, last_name = $4, updated_at = now() WHERE id = $5")
-            .bind(identity.id).bind(email).bind(first_name.trim()).bind(last_name.trim()).bind(id).execute(db).await?;
-        return Ok(id);
+            .bind(identity.id).bind(&email).bind(first_name.trim()).bind(last_name.trim()).bind(id).execute(db).await?;
+        return Ok(UpsertedHackClubUser {
+            id,
+            email,
+            created: false,
+        });
     }
     let id = Uuid::new_v4();
     sqlx::query(
@@ -163,12 +176,16 @@ pub async fn upsert_hackclub_user(db: &PgPool, identity: HackClubIdentity) -> Ap
     )
     .bind(id)
     .bind(identity.id)
-    .bind(email)
+    .bind(&email)
     .bind(first_name.trim())
     .bind(last_name.trim())
     .execute(db)
     .await?;
-    Ok(id)
+    Ok(UpsertedHackClubUser {
+        id,
+        email,
+        created: true,
+    })
 }
 
 pub async fn create_session(db: &PgPool, user_id: Uuid) -> ApiResult<String> {

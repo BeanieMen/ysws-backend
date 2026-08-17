@@ -6,6 +6,7 @@ pub mod crypto;
 pub mod database;
 pub mod domain;
 pub mod error;
+pub mod notifications;
 pub mod ports;
 pub mod providers;
 pub mod test;
@@ -15,6 +16,7 @@ use crate::{
     cache::Cache,
     config::Config,
     crypto::TokenCipher,
+    notifications::Notifications,
     providers::Providers,
 };
 use axum::extract::DefaultBodyLimit;
@@ -25,7 +27,7 @@ use tower_http::{
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
     let db = database::connect_and_migrate(&config.database_url).await?;
     let cache = Cache::connect(&config.redis_url).await?;
     let providers = Providers::new(config.clone())?;
+    let notifications = Notifications::new(&config)?;
 
     tokio::fs::create_dir_all("uploads/banners").await.ok();
 
@@ -48,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         cache,
         cipher: TokenCipher::new(config.encryption_key),
         providers,
+        notifications: notifications.clone(),
         app_url: config.app_url.clone(),
         cookie_secure: config.cookie_secure,
     };
@@ -57,6 +61,11 @@ async fn main() -> anyhow::Result<()> {
             airtable_sync_interval,
         ));
     }
+    tokio::spawn(async move {
+        if let Err(error) = notifications.backend_started().await {
+            warn!(error = %error, "failed to post backend-started notification to Slack");
+        }
+    });
     let app = router(app_state)
         // Leaves room for multipart framing while keeping banner data itself at 10 MiB.
         .layer(DefaultBodyLimit::max(11 * 1024 * 1024))

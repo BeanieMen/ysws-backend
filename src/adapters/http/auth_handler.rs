@@ -68,8 +68,14 @@ pub async fn hackclub_callback(
         .code
         .ok_or_else(|| ApiError::BadRequest("missing OAuth code".into()))?;
     let identity = state.providers.hackclub_identity(&code).await?;
-    let user_id = upsert_hackclub_user(&state.db, identity).await?;
-    let token = create_session(&state.db, user_id).await?;
+    let user = upsert_hackclub_user(&state.db, identity).await?;
+    let token = create_session(&state.db, user.id).await?;
+    if user.created {
+        let notifications = state.notifications.clone();
+        tokio::spawn(async move {
+            let _ = notifications.new_user_signed_up(&user.email).await;
+        });
+    }
     let mut response = Redirect::to("/dashboard").into_response();
     response
         .headers_mut()

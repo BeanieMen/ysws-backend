@@ -3,6 +3,7 @@ use crate::{
         admin_handler, airtable_handler, attendance_handler, auth_handler, health_handler,
         project_handler, review_handler, user_handler,
     },
+    notifications::Notifications,
     ports::{CachePort, CryptoPort, DbPort, ProvidersPort},
 };
 use axum::{
@@ -18,6 +19,7 @@ pub struct AppState {
     pub cache: CachePort,
     pub cipher: CryptoPort,
     pub providers: ProvidersPort,
+    pub notifications: Notifications,
     pub app_url: String,
     pub cookie_secure: bool,
 }

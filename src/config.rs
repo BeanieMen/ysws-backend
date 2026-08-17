@@ -16,6 +16,10 @@ pub struct Config {
     pub hackatime_client_secret: String,
     pub hackatime_redirect_uri: String,
     pub cookie_secure: bool,
+    pub resend_api_token: Option<String>,
+    pub resend_from_email: Option<String>,
+    pub slack_bot_token: Option<String>,
+    pub slack_channel_id: Option<String>,
     pub lapse_api_base_url: String,
     pub lapse_api_token: Option<String>,
     pub airtable_api_key: Option<String>,
@@ -91,6 +95,10 @@ impl Config {
             // Secure cookies are the safe default. Local HTTP development can opt out
             // explicitly with COOKIE_SECURE=false.
             cookie_secure: optional_bool("COOKIE_SECURE")?.unwrap_or(true),
+            resend_api_token: optional("RESEND_API_TOKEN"),
+            resend_from_email: optional("RESEND_FROM_EMAIL"),
+            slack_bot_token: optional("SLACK_BOT_TOKEN"),
+            slack_channel_id: optional("SLACK_CHANNEL_ID"),
             lapse_api_base_url: env_or("LAPSE_API_BASE_URL", "https://api.lapse.hackclub.com"),
             lapse_api_token: env::var("LAPSE_API_TOKEN").ok().filter(|s| !s.is_empty()),
             airtable_api_key: optional("AIRTABLE_API_KEY"),
