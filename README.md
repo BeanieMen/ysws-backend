@@ -34,7 +34,8 @@ docker compose up --scale backend=3 -d
 ### Option 2: Local Backend Development (Cargo)
 
 ```bash
-# 1. Copy environment configuration
+# 1. Copy environment configuration, then set POSTGRES_PASSWORD,
+#    APP_ENCRYPTION_KEY, and OAuth credentials in .env
 cp .env.example .env
 
 # 2. Start PostgreSQL and Redis infrastructure

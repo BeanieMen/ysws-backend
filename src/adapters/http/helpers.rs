@@ -4,7 +4,9 @@ use crate::{
     error::{ApiError, ApiResult},
     ports::CryptoPort,
 };
+use aes_gcm::aead::{OsRng, rand_core::RngCore};
 use axum::http::HeaderMap;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use std::time::Duration;
@@ -170,7 +172,9 @@ pub async fn upsert_hackclub_user(db: &PgPool, identity: HackClubIdentity) -> Ap
 }
 
 pub async fn create_session(db: &PgPool, user_id: Uuid) -> ApiResult<String> {
-    let token = Uuid::new_v4().to_string();
+    let mut token_bytes = [0_u8; 32];
+    OsRng.fill_bytes(&mut token_bytes);
+    let token = URL_SAFE_NO_PAD.encode(token_bytes);
     sqlx::query("INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '21 days')")
         .bind(Uuid::new_v4()).bind(user_id).bind(token_hash(&token)).execute(db).await?;
     Ok(token)
@@ -183,6 +187,12 @@ pub fn session_token(headers: &HeaderMap) -> Option<&str> {
         .split(';')
         .map(str::trim)
         .find_map(|cookie| cookie.strip_prefix("session="))
+        .filter(|token| {
+            token.len() == 43
+                && token
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        })
 }
 
 #[must_use]

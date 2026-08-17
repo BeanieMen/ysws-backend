@@ -6,7 +6,7 @@ use crate::{
     ports::{CachePort, CryptoPort, DbPort, ProvidersPort},
 };
 use axum::{
-    Router,
+    Router, middleware,
     routing::{delete, get, post, put},
 };
 use std::sync::Arc;
@@ -18,10 +18,12 @@ pub struct AppState {
     pub cache: CachePort,
     pub cipher: CryptoPort,
     pub providers: ProvidersPort,
+    pub app_url: String,
     pub cookie_secure: bool,
 }
 
 pub fn router(state: AppState) -> Router {
+    let state = Arc::new(state);
     Router::new()
         .nest_service("/uploads", ServeDir::new("uploads"))
         .route("/healthz", get(health_handler::health))
@@ -101,5 +103,9 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/projects/{project_id}",
             delete(admin_handler::admin_delete_project),
         )
-        .with_state(Arc::new(state))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            super::csrf::require_same_origin,
+        ))
+        .with_state(state)
 }

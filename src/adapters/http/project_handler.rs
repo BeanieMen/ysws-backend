@@ -18,8 +18,15 @@ use axum::{
     extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
 };
-use std::{sync::Arc, time::Duration};
+use std::{
+    path::{Path as FilePath, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
+
+const MAX_BANNER_BYTES: usize = 10 * 1024 * 1024;
 
 /// Creates a new project.
 ///
@@ -251,9 +258,6 @@ pub async fn upload_project_banner(
     let session_user = current_session_user(&state, &headers).await?;
     own_project_or_admin(&state.db, project_id, &session_user).await?;
 
-    let mut file_data = Vec::new();
-    let mut file_ext = "png".to_string();
-
     while let Some(field) = multipart
         .next_field()
         .await
@@ -261,66 +265,134 @@ pub async fn upload_project_banner(
     {
         let name = field.name().unwrap_or("");
         if name == "banner" || name == "file" || name == "image" || name == "upload" {
-            if let Some(content_type) = field.content_type() {
-                file_ext = match content_type {
-                    "image/jpeg" | "image/jpg" => "jpg".into(),
-                    "image/png" => "png".into(),
-                    "image/webp" => "webp".into(),
-                    "image/gif" => "gif".into(),
-                    _ => {
-                        return Err(ApiError::BadRequest(
-                            "only JPEG, PNG, WebP, and GIF images are allowed".into(),
-                        ));
-                    }
-                };
-            }
-            file_data = field
-                .bytes()
+            let upload_dir = FilePath::new("uploads/banners");
+            tokio::fs::create_dir_all(upload_dir)
                 .await
-                .map_err(|e| ApiError::BadRequest(format!("failed to read image file: {e}")))?
-                .to_vec();
-            break;
+                .map_err(|e| ApiError::Internal(e.into()))?;
+            let (temp_path, file_ext) = stream_banner(field, upload_dir).await?;
+            let filename = format!("{project_id}_{}.{file_ext}", Uuid::new_v4());
+            let filepath = upload_dir.join(&filename);
+            tokio::fs::rename(&temp_path, &filepath)
+                .await
+                .map_err(|e| ApiError::Internal(e.into()))?;
+
+            let banner_url = format!("/uploads/banners/{filename}");
+            sqlx::query("UPDATE projects SET banner_url = $1, updated_at = now() WHERE id = $2")
+                .bind(&banner_url)
+                .bind(project_id)
+                .execute(&state.db)
+                .await?;
+
+            state
+                .cache
+                .delete(&format!("project:{project_id}:hackatime"))
+                .await;
+
+            return Ok(Json(ProjectBannerResponse {
+                project_id,
+                banner_url,
+            }));
         }
     }
 
-    if file_data.is_empty() {
+    Err(ApiError::BadRequest("no banner image file provided".into()))
+}
+
+async fn stream_banner(
+    mut field: axum::extract::multipart::Field<'_>,
+    upload_dir: &FilePath,
+) -> ApiResult<(PathBuf, &'static str)> {
+    let temp_path = upload_dir.join(format!(".{}.upload", Uuid::new_v4()));
+    let mut output = tokio::fs::File::create(&temp_path)
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
+    let mut total_bytes = 0_usize;
+    let mut signature = Vec::with_capacity(12);
+
+    loop {
+        let chunk = match field.chunk().await {
+            Ok(Some(chunk)) => chunk,
+            Ok(None) => break,
+            Err(error) => {
+                drop(output);
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                return Err(ApiError::BadRequest(format!(
+                    "failed to read image file: {error}"
+                )));
+            }
+        };
+        total_bytes = total_bytes.checked_add(chunk.len()).ok_or_else(|| {
+            ApiError::BadRequest("banner image exceeds maximum limit of 10MB".into())
+        })?;
+        if total_bytes > MAX_BANNER_BYTES {
+            drop(output);
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return Err(ApiError::BadRequest(
+                "banner image exceeds maximum limit of 10MB".into(),
+            ));
+        }
+        let remaining_signature = 12_usize.saturating_sub(signature.len());
+        signature.extend(chunk.iter().copied().take(remaining_signature));
+        if let Err(error) = output.write_all(&chunk).await {
+            drop(output);
+            let _ = tokio::fs::remove_file(&temp_path).await;
+            return Err(ApiError::Internal(error.into()));
+        }
+    }
+
+    if total_bytes == 0 {
+        let _ = tokio::fs::remove_file(&temp_path).await;
         return Err(ApiError::BadRequest("no banner image file provided".into()));
     }
-
-    if file_data.len() > 10 * 1024 * 1024 {
-        return Err(ApiError::BadRequest(
-            "banner image exceeds maximum limit of 10MB".into(),
-        ));
+    if let Err(error) = output.flush().await {
+        drop(output);
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        return Err(ApiError::Internal(error.into()));
     }
+    drop(output);
 
-    let upload_dir = std::path::Path::new("uploads/banners");
-    tokio::fs::create_dir_all(upload_dir)
-        .await
-        .map_err(|e| ApiError::Internal(e.into()))?;
+    if let Some(extension) = image_extension(&signature) {
+        Ok((temp_path, extension))
+    } else {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+        Err(ApiError::BadRequest(
+            "only valid JPEG, PNG, WebP, and GIF images are allowed".into(),
+        ))
+    }
+}
 
-    let filename = format!("{project_id}_{}.{file_ext}", Uuid::new_v4());
-    let filepath = upload_dir.join(&filename);
-    tokio::fs::write(&filepath, file_data)
-        .await
-        .map_err(|e| ApiError::Internal(e.into()))?;
+fn image_extension(signature: &[u8]) -> Option<&'static str> {
+    const PNG: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a];
+    if signature.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("jpg")
+    } else if signature.starts_with(&PNG) {
+        Some("png")
+    } else if signature.starts_with(b"GIF87a") || signature.starts_with(b"GIF89a") {
+        Some("gif")
+    } else if signature.starts_with(b"RIFF")
+        && signature.get(8..12).is_some_and(|magic| magic == b"WEBP")
+    {
+        Some("webp")
+    } else {
+        None
+    }
+}
 
-    let banner_url = format!("/uploads/banners/{filename}");
+#[cfg(test)]
+mod tests {
+    use super::image_extension;
 
-    sqlx::query("UPDATE projects SET banner_url = $1, updated_at = now() WHERE id = $2")
-        .bind(&banner_url)
-        .bind(project_id)
-        .execute(&state.db)
-        .await?;
-
-    state
-        .cache
-        .delete(&format!("project:{project_id}:hackatime"))
-        .await;
-
-    Ok(Json(ProjectBannerResponse {
-        project_id,
-        banner_url,
-    }))
+    #[test]
+    fn identifies_image_types_by_their_contents() {
+        assert_eq!(image_extension(&[0xff, 0xd8, 0xff]), Some("jpg"));
+        assert_eq!(
+            image_extension(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]),
+            Some("png")
+        );
+        assert_eq!(image_extension(b"GIF89a"), Some("gif"));
+        assert_eq!(image_extension(b"RIFFxxxxWEBP"), Some("webp"));
+        assert_eq!(image_extension(b"not-an-image"), None);
+    }
 }
 
 /// Ships a project, making it visible to reviewers.

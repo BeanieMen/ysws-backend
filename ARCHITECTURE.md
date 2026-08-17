@@ -208,5 +208,5 @@ project_reviews (
 ## 📈 Performance & Tuning Specs
 
 - **Database Connection Pool**: 50 max connections with 10 min idle connections (`PgPoolOptions`).
-- **Body Upload Limit**: Axum `DefaultBodyLimit::max(15MB)` supporting multipart banner uploads.
+- **Body Upload Limit**: an 11 MiB request limit allows multipart framing while banner data is streamed and capped at 10 MiB.
 - **Distributed Lock Manager**: Redis-backed mutex locks (`lock:project:{id}`) ensuring idempotent write operations under high concurrent load.

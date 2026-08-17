@@ -16,13 +16,13 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/test-instance
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/test-instance
       REDIS_URL: redis://redis:6379
       PORT: 8000
       APP_URL: ${APP_URL:-http://localhost:3000}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
     volumes:
-      - uploads_data:/uploads
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,9 +34,7 @@ services:
     environment:
       POSTGRES_DB: test-instance
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d test-instance"]
       interval: 5s
@@ -48,8 +46,6 @@ services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

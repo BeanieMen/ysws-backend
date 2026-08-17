@@ -15,6 +15,10 @@ export async function backendFetch(
   const headers = new Headers(init.headers);
   const cookie = request.headers.get("cookie");
   if (cookie) headers.set("cookie", cookie);
+  const origin = request.headers.get("origin");
+  if (origin) headers.set("origin", origin);
+  const contentType = request.headers.get("content-type");
+  if (contentType && !headers.has("content-type")) headers.set("content-type", contentType);
 
   return fetch(`${backendUrl}${path}`, {
     ...init,

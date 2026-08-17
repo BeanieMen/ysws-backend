@@ -42,6 +42,14 @@ impl Config {
 
         let encryption_key = env::var("APP_ENCRYPTION_KEY")
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be configured"))?;
+        let encryption_key = encryption_key.trim();
+        if encryption_key.is_empty()
+            || encryption_key.eq_ignore_ascii_case("replace-with-64-hex-characters")
+        {
+            anyhow::bail!(
+                "APP_ENCRYPTION_KEY must be set to a unique 64-character hexadecimal key"
+            );
+        }
 
         let bytes = hex::decode(encryption_key)
             .map_err(|_| anyhow::anyhow!("APP_ENCRYPTION_KEY must be hexadecimal"))?;
@@ -80,8 +88,9 @@ impl Config {
             hackatime_client_id: required("HACKATIME_CLIENT_ID")?,
             hackatime_client_secret: required("HACKATIME_CLIENT_SECRET")?,
             hackatime_redirect_uri,
-            cookie_secure: env::var("COOKIE_SECURE")
-                .is_ok_and(|value| value == "true" || value == "1"),
+            // Secure cookies are the safe default. Local HTTP development can opt out
+            // explicitly with COOKIE_SECURE=false.
+            cookie_secure: optional_bool("COOKIE_SECURE")?.unwrap_or(true),
             lapse_api_base_url: env_or("LAPSE_API_BASE_URL", "https://api.lapse.hackclub.com"),
             lapse_api_token: env::var("LAPSE_API_TOKEN").ok().filter(|s| !s.is_empty()),
             airtable_api_key: optional("AIRTABLE_API_KEY"),
@@ -125,4 +134,15 @@ fn optional(name: &str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
+}
+
+fn optional_bool(name: &str) -> anyhow::Result<Option<bool>> {
+    let Some(value) = optional(name) else {
+        return Ok(None);
+    };
+    match value.to_ascii_lowercase().as_str() {
+        "true" | "1" => Ok(Some(true)),
+        "false" | "0" => Ok(Some(false)),
+        _ => anyhow::bail!("{name} must be true or false"),
+    }
 }

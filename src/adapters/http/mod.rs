@@ -3,6 +3,7 @@ pub mod airtable_handler;
 pub mod attendance_handler;
 pub mod auth_handler;
 pub mod cookies;
+pub mod csrf;
 pub mod health_handler;
 pub mod helpers;
 pub mod project_handler;

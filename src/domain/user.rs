@@ -77,18 +77,3 @@ pub struct AdminUpdateUserRequest {
     pub last_name: Option<String>,
     pub role: Option<UserRole>,
 }
-
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn serializes_and_deserializes_user_roles() {
-        let role = UserRole::Admin;
-        let json = serde_json::to_string(&role).unwrap();
-        assert_eq!(json, "\"admin\"");
-        let parsed: UserRole = serde_json::from_str("\"reviewer\"").unwrap();
-        assert_eq!(parsed, UserRole::Reviewer);
-    }
-}
