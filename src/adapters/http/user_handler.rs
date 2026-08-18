@@ -1,6 +1,6 @@
 use crate::{
     adapters::http::{AppState, helpers::current_session_user},
-    domain::CurrentUserResponse,
+    domain::{CurrentUserResponse, minutes_as_hours},
     error::ApiResult,
 };
 use axum::{Json, extract::State, http::HeaderMap};
@@ -22,6 +22,12 @@ pub async fn current_user_profile(
     .bind(user.id)
     .fetch_one(&state.db)
     .await?;
+    let minutes: i64 =
+        sqlx::query_scalar("SELECT available_minutes FROM user_wallets WHERE user_id = $1")
+            .bind(user.id)
+            .fetch_optional(&state.db)
+            .await?
+            .unwrap_or(0);
     Ok(Json(CurrentUserResponse {
         id: user.id,
         email: user.email,
@@ -29,5 +35,6 @@ pub async fn current_user_profile(
         last_name: user.last_name,
         role: user.role,
         hackatime_connected,
+        available_hours: minutes_as_hours(minutes),
     }))
 }

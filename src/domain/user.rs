@@ -53,6 +53,7 @@ pub struct CurrentUserResponse {
     pub last_name: String,
     pub role: UserRole,
     pub hackatime_connected: bool,
+    pub available_hours: f64,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]

@@ -1,7 +1,7 @@
 use crate::{
     adapters::http::{
         admin_handler, airtable_handler, attendance_handler, auth_handler, health_handler,
-        project_handler, review_handler, user_handler,
+        project_handler, review_handler, shop_handler, user_handler,
     },
     notifications::Notifications,
     ports::{CachePort, CryptoPort, DbPort, ProvidersPort},
@@ -41,6 +41,12 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/auth/logout", post(auth_handler::logout))
         .route("/api/v1/me", get(user_handler::current_user_profile))
+        .route("/api/v1/shop/items", get(shop_handler::list_items))
+        .route("/api/v1/shop/me", get(shop_handler::shop_account))
+        .route(
+            "/api/v1/shop/items/{item_id}/purchase",
+            post(shop_handler::purchase_item),
+        )
         .route(
             "/api/v1/projects",
             get(project_handler::list_projects).post(project_handler::create_project),

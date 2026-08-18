@@ -37,6 +37,7 @@ interface CurrentUser {
   first_name: string;
   role: "user" | "reviewer" | "admin";
   hackatime_connected: boolean;
+  available_hours: number;
 }
 
 function errorMessage(error: unknown) {
@@ -96,6 +97,7 @@ export default function Dashboard() {
   const [userName, setUserName] = useState("");
   const [role, setRole] = useState<CurrentUser["role"]>("user");
   const [hackatimeConnected, setHackatimeConnected] = useState(true);
+  const [availableHours, setAvailableHours] = useState(0);
   const [dashboard, setDashboard] = useState<DashboardData>({ projects: [], total_seconds: 0 });
   const [availableProjects, setAvailableProjects] = useState<HackatimeProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,14 +142,16 @@ export default function Dashboard() {
     return (res.status === 204 ? null : await res.json()) as T;
   }, [router]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (user?: CurrentUser) => {
     try {
-      const [dash, ht] = await Promise.all([
+      const [dash, ht, me] = await Promise.all([
         fetchApi<DashboardData>("/api/v1/projects"),
         fetchApi<{ projects: HackatimeProject[] }>("/api/v1/hackatime/projects").catch(() => ({ projects: [] })),
+        user ?? fetchApi<CurrentUser>("/api/v1/me"),
       ]);
       setDashboard(dash || { projects: [], total_seconds: 0 });
       setAvailableProjects(ht?.projects || []);
+      setAvailableHours(me.available_hours);
     } catch (error) {
       console.error(error);
     } finally {
@@ -170,7 +174,7 @@ export default function Dashboard() {
         setUserName(user.first_name);
         setRole(user.role);
         setHackatimeConnected(user.hackatime_connected);
-        void loadData();
+        void loadData(user);
         if (user.role === "reviewer") void loadReviewProjects().catch((error) => setReviewMessage(errorMessage(error)));
       })
       .catch(() => {
@@ -226,6 +230,7 @@ export default function Dashboard() {
         }),
       });
       setReviewMessage("Review saved.");
+      await loadData();
     } catch (error) {
       setReviewMessage(errorMessage(error));
     } finally {
@@ -269,6 +274,9 @@ export default function Dashboard() {
         </Link>
         <div className="flex items-center gap-4 text-sm font-semibold">
           {role === "reviewer" && <span className="text-[#ec3750]">Reviewer</span>}
+          <Link href="/shop" className="text-slate-500 hover:text-[#ec3750] transition text-xs font-bold">
+            Shop
+          </Link>
           <span>{userName}</span>
           <button
             onClick={handleLogout}
@@ -289,12 +297,23 @@ export default function Dashboard() {
               Build in public. Track every minute.
             </h1>
           </div>
-          <div className="w-full md:w-auto p-5 rounded-2xl border border-[#ec3750]/20 bg-gradient-to-br from-[#ec3750]/5 to-[#ec3750]/15 min-w-[240px]">
-            <span className="text-xs font-semibold text-slate-500">Total tracked</span>
-            <strong className="block text-4xl font-extrabold text-[#ec3750] my-1">
-              {formatTime(dashboard.total_seconds)}
-            </strong>
-            <small className="text-xs text-slate-500">across your linked projects</small>
+          <div className="flex gap-4 w-full md:w-auto">
+            <div className="flex-1 md:flex-initial p-5 rounded-2xl border border-slate-200 bg-white min-w-[200px]">
+              <span className="text-xs font-semibold text-slate-500">Total tracked</span>
+              <strong className="block text-3xl font-extrabold text-slate-900 my-1">
+                {formatTime(dashboard.total_seconds)}
+              </strong>
+              <small className="text-xs text-slate-500">across linked projects</small>
+            </div>
+            <div className="flex-1 md:flex-initial p-5 rounded-2xl border border-[#ec3750]/20 bg-gradient-to-br from-[#ec3750]/5 to-[#ec3750]/15 min-w-[200px]">
+              <span className="text-xs font-semibold text-slate-500">Approved balance</span>
+              <strong className="block text-3xl font-extrabold text-[#ec3750] my-1">
+                {availableHours.toFixed(2)}h
+              </strong>
+              <Link href="/shop" className="text-xs font-bold text-[#ec3750] hover:underline">
+                Go to shop →
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -365,7 +384,7 @@ export default function Dashboard() {
                 <h2 className="text-2xl font-extrabold">Your current constellation</h2>
               </div>
               <button
-                onClick={loadData}
+                onClick={() => void loadData()}
                 className="text-xs font-bold text-slate-500 hover:text-[#ec3750] transition"
               >
                 Refresh time

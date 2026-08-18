@@ -92,6 +92,26 @@ Hackatime.
 | `DELETE` | `/api/v1/admin/users/:id` | Delete user account | Admin Only |
 | `DELETE` | `/api/v1/admin/projects/:id` | Delete project | Admin Only |
 
+### Approved-hours shop
+
+Each project is credited exactly once when its reviewer approval and Airtable
+fraud approval are both `approved`, in either order. The immutable credit is a
+snapshot of the project's linked Hackatime duration, rounded down to a whole
+minute. The initial `event-ticket` costs 40 approved hours.
+
+| Method | Endpoint | Description | Access |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/shop/items` | Active catalogue with public display prices | Public |
+| `GET` | `/api/v1/shop/me` | Approved-hours balance and claimed items | Authenticated |
+| `POST` | `/api/v1/shop/items/:id/purchase` | Claim an item | Authenticated; `Idempotency-Key` required |
+
+The purchase API accepts no client-supplied price or user ID. It locks the
+canonical item, atomically debits the database balance only when sufficient,
+allows one claim per item/user, and writes the ticket confirmation to a durable
+email outbox before committing. Configure `RESEND_API_TOKEN` and
+`RESEND_FROM_EMAIL` to deliver confirmation emails; pending emails retry every
+five minutes.
+
 ---
 
 ## 🧪 Testing

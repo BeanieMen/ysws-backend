@@ -290,6 +290,15 @@ async fn sync_fraud_statuses(state: &AppState) -> ApiResult<usize> {
             );
         } else {
             debug!(%project_id, fraud_status = status, "fraud status updated in DB");
+            if status == "approved"
+                && let Err(error) =
+                    crate::approved_hours::award_if_fully_approved(state, project_id).await
+            {
+                // The Airtable decision must remain persisted even if the
+                // time provider is temporarily unavailable. Future syncs
+                // retry this idempotent award.
+                warn!(%project_id, %error, "approved-hours award will be retried");
+            }
         }
         updated = updated.saturating_add(usize::try_from(rows).unwrap_or(0));
     }

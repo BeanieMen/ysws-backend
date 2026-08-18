@@ -1,5 +1,6 @@
 pub mod adapters;
 pub mod airtable_sync;
+pub mod approved_hours;
 pub mod cache;
 pub mod config;
 pub mod crypto;
@@ -66,6 +67,19 @@ async fn main() -> anyhow::Result<()> {
             warn!(error = %error, "failed to post backend-started notification to Slack");
         }
     });
+    let email_retry_state = app_state.clone();
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(Duration::from_mins(5));
+        loop {
+            ticker.tick().await;
+            if let Err(error) =
+                crate::adapters::http::shop_handler::retry_pending_ticket_emails(&email_retry_state)
+                    .await
+            {
+                warn!(error = %error, "ticket confirmation retry sweep failed");
+            }
+        }
+    });
     let app = router(app_state)
         // Leaves room for multipart framing while keeping banner data itself at 10 MiB.
         .layer(DefaultBodyLimit::max(11 * 1024 * 1024))
@@ -90,7 +104,10 @@ async fn main() -> anyhow::Result<()> {
                     axum::http::Method::PUT,
                     axum::http::Method::DELETE,
                 ])
-                .allow_headers([axum::http::header::CONTENT_TYPE])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::HeaderName::from_static("idempotency-key"),
+                ])
                 .allow_credentials(true),
         );
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port)).await?;

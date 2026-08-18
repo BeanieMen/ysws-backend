@@ -98,6 +98,12 @@ pub async fn create_project_review(
     .execute(&state.db)
     .await?;
 
+    // Either fraud approval or reviewer approval may arrive first. The helper
+    // re-checks both states under a row lock and records an idempotent credit.
+    if review.status == "approved" {
+        crate::approved_hours::award_if_fully_approved(&state, project_id).await?;
+    }
+
     Ok((StatusCode::CREATED, Json(review)))
 }
 

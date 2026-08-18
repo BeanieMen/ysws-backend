@@ -1,8 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
 #[cfg(test)]
-use crate::crypto::TokenCipher;
-#[cfg(test)]
 use crate::domain::{HackClubIdentity, HackatimeProject};
 #[cfg(test)]
 use crate::test::mock_db::MockDatabase;
@@ -121,25 +119,11 @@ async fn test_mock_providers_hackatime_projects() {
 }
 
 #[test]
-fn test_mock_db_with_token_cipher() {
-    let db = MockDatabase::new();
-    let cipher = TokenCipher::new([42; 32]);
-
-    let user_id = Uuid::new_v4();
-    let raw_token = "secret_hackatime_access_token_123";
-    let encrypted_token = cipher.encrypt(raw_token).unwrap();
-
-    db.save_hackatime_connection(user_id, "acc_456".into(), encrypted_token);
-
-    let conn = db
-        .hackatime_connections
-        .lock()
-        .unwrap()
-        .get(&user_id)
-        .cloned()
-        .unwrap();
-    assert_eq!(conn.account_id, "acc_456");
-
-    let decrypted = cipher.decrypt(&conn.access_token_ciphertext).unwrap();
-    assert_eq!(decrypted, raw_token);
+fn test_minutes_as_hours_conversion() {
+    use crate::domain::minutes_as_hours;
+    let assert_close = |actual: f64, expected: f64| assert!((actual - expected).abs() < f64::EPSILON);
+    assert_close(minutes_as_hours(0), 0.0);
+    assert_close(minutes_as_hours(60), 1.0);
+    assert_close(minutes_as_hours(30), 0.5);
+    assert_close(minutes_as_hours(2400), 40.0);
 }

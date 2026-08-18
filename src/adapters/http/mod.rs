@@ -9,6 +9,7 @@ pub mod helpers;
 pub mod project_handler;
 pub mod review_handler;
 pub mod router;
+pub mod shop_handler;
 pub mod user_handler;
 
 pub use router::*;

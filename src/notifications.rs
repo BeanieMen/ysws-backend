@@ -40,6 +40,36 @@ impl Notifications {
         Ok(())
     }
 
+    /// Sends the confirmation after a user has successfully claimed the event
+    /// ticket. The database outbox makes this safe to retry after provider
+    /// failures.
+    pub async fn ticket_purchase_confirmation(
+        &self,
+        email: &str,
+        first_name: &str,
+    ) -> anyhow::Result<()> {
+        let (Some(token), Some(from)) = (&self.resend_api_token, &self.resend_from_email) else {
+            return Ok(());
+        };
+        let response = self
+            .client
+            .post("https://api.resend.com/emails")
+            .bearer_auth(token)
+            .json(&serde_json::json!({
+                "from": from,
+                "to": [email],
+                "subject": "Your event ticket is confirmed!",
+                "text": format!("Congratulations, {first_name}! You've claimed your event ticket with 40 approved hours. Your spot is confirmed—we can't wait to see you at the event."),
+            }))
+            .send()
+            .await?;
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            anyhow::bail!("Resend returned {}", response.status())
+        }
+    }
+
     async fn send_welcome_email(&self, email: &str) -> anyhow::Result<()> {
         let (Some(token), Some(from)) = (&self.resend_api_token, &self.resend_from_email) else {
             return Ok(());

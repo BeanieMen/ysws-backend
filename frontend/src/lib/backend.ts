@@ -19,6 +19,8 @@ export async function backendFetch(
   if (origin) headers.set("origin", origin);
   const contentType = request.headers.get("content-type");
   if (contentType && !headers.has("content-type")) headers.set("content-type", contentType);
+  const idempotencyKey = request.headers.get("idempotency-key");
+  if (idempotencyKey && !headers.has("idempotency-key")) headers.set("idempotency-key", idempotencyKey);
 
   return fetch(`${backendUrl}${path}`, {
     ...init,

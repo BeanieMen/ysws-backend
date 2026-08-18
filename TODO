@@ -1,20 +1,9 @@
-loops (email/marketing)
 manifest
 document
 permission
-
-shop
-streaks
-
-ticket-qualify-email
-posthog — analytics tracking
-metrics
-
-slack
-slack-channels
-huddles
 
 frontend
 design
 theme
 mascot
+shop

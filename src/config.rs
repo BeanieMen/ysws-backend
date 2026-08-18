@@ -119,7 +119,7 @@ impl Config {
                     .ok()
                     .and_then(|value| value.parse().ok())
                     .filter(|seconds: &u64| *seconds > 0)
-                    .unwrap_or(300),
+                    .unwrap_or(30),
             ),
             provider_timeout: Duration::from_secs(10),
         })
