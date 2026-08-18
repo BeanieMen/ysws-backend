@@ -10,6 +10,7 @@ pub mod error;
 pub mod notifications;
 pub mod ports;
 pub mod providers;
+#[cfg(test)]
 pub mod test;
 
 use crate::{

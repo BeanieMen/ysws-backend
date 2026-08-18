@@ -378,23 +378,6 @@ fn image_extension(signature: &[u8]) -> Option<&'static str> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::image_extension;
-
-    #[test]
-    fn identifies_image_types_by_their_contents() {
-        assert_eq!(image_extension(&[0xff, 0xd8, 0xff]), Some("jpg"));
-        assert_eq!(
-            image_extension(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]),
-            Some("png")
-        );
-        assert_eq!(image_extension(b"GIF89a"), Some("gif"));
-        assert_eq!(image_extension(b"RIFFxxxxWEBP"), Some("webp"));
-        assert_eq!(image_extension(b"not-an-image"), None);
-    }
-}
-
 /// Ships a project, making it visible to reviewers.
 ///
 /// # Errors
@@ -424,4 +407,21 @@ pub async fn ship_project(
         project_approval_status,
         fraud_approval_status,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::image_extension;
+
+    #[test]
+    fn identifies_image_types_by_their_contents() {
+        assert_eq!(image_extension(&[0xff, 0xd8, 0xff]), Some("jpg"));
+        assert_eq!(
+            image_extension(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]),
+            Some("png")
+        );
+        assert_eq!(image_extension(b"GIF89a"), Some("gif"));
+        assert_eq!(image_extension(b"RIFFxxxxWEBP"), Some("webp"));
+        assert_eq!(image_extension(b"not-an-image"), None);
+    }
 }

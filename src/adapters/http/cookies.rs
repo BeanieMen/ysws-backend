@@ -23,8 +23,11 @@ mod tests {
 
     #[test]
     fn marks_production_session_cookies_secure() {
-        let cookie = session_cookie("token", true).unwrap();
-        let value = cookie.to_str().unwrap();
+        let cookie = session_cookie("token", true).ok();
+        assert!(cookie.is_some(), "session cookie header must serialize");
+        let value = cookie
+            .and_then(|cookie| cookie.to_str().ok().map(str::to_owned))
+            .unwrap_or_default();
         assert!(value.contains("HttpOnly"));
         assert!(value.contains("SameSite=Lax"));
         assert!(value.contains("Secure"));

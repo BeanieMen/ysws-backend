@@ -121,7 +121,8 @@ async fn test_mock_providers_hackatime_projects() {
 #[test]
 fn test_minutes_as_hours_conversion() {
     use crate::domain::minutes_as_hours;
-    let assert_close = |actual: f64, expected: f64| assert!((actual - expected).abs() < f64::EPSILON);
+    let assert_close =
+        |actual: f64, expected: f64| assert!((actual - expected).abs() < f64::EPSILON);
     assert_close(minutes_as_hours(0), 0.0);
     assert_close(minutes_as_hours(60), 1.0);
     assert_close(minutes_as_hours(30), 0.5);

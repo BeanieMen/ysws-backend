@@ -8,6 +8,7 @@ pub struct Notifications {
     client: Client,
     resend_api_token: Option<String>,
     resend_from_email: Option<String>,
+    resend_base_url: String,
     slack_bot_token: Option<String>,
     slack_channel_id: Option<String>,
 }
@@ -21,6 +22,7 @@ impl Notifications {
             resend_from_email: config.resend_from_email.clone(),
             slack_bot_token: config.slack_bot_token.clone(),
             slack_channel_id: config.slack_channel_id.clone(),
+            resend_base_url: config.resend_api_base_url.clone(),
         })
     }
 
@@ -53,7 +55,7 @@ impl Notifications {
         };
         let response = self
             .client
-            .post("https://api.resend.com/emails")
+            .post(&self.resend_base_url)
             .bearer_auth(token)
             .json(&serde_json::json!({
                 "from": from,
@@ -76,7 +78,7 @@ impl Notifications {
         };
         let response = self
             .client
-            .post("https://api.resend.com/emails")
+            .post(&self.resend_base_url)
             .bearer_auth(token)
             .json(&serde_json::json!({
                 "from": from,
