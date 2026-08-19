@@ -16,7 +16,9 @@ i made this to in the future use for my own ysws event hopefully wish me luck ig
 
 
 ## tech stack
-i used rust, axum for api requests for the backend thats IT. it only calls api what did you even expect
+i used rust, axum for api requests for the backend thats IT. it only calls api what did you even expect. this is all encompassed in a docker container along with postgres for db in another container and redis in another container for db prot. 
+
+the backend container can be spawned n number of times. they sit behind a nginx gateway which routes requests to the available container to make it scaleable
 
 
 ## how this was made
